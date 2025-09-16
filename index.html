@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Cute Platformer — Spikes Fixed</title>
+<title>Cute Platformer</title>
 <style>
   html,body { height:100%; margin:0; background: linear-gradient(180deg,#FFF9FB,#F0F9FF); font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
   #gameCanvas { display:block; width:100vw; height:100vh; background: transparent; }
@@ -12,6 +12,7 @@
   .btn { pointer-events:auto; border:0; padding:10px 18px; border-radius:10px; cursor:pointer; font-weight:600; }
   .btn.primary { background: linear-gradient(180deg,#FFD6E0,#FF9CCC); }
   .btn.alt { background: linear-gradient(180deg,#D7F0FF,#A9E0FF); }
+  .btn.danger { background: linear-gradient(180deg,#FFBDBD,#FF8A8A); }
   #hud { position:absolute; left:0; right:0; top:8px; display:flex; justify-content:center; pointer-events:none; }
   #hud .level { font-size:36px; color:#222; font-weight:700; background: rgba(255,255,255,0.9); padding:8px 16px; border-radius:14px; }
   #sideHud { position:absolute; left:12px; top:12px; pointer-events:none; display:flex; flex-direction:column; gap:8px; }
@@ -21,7 +22,10 @@
   #levelSelectGrid { display:grid; grid-template-columns: repeat(10, 36px); gap:6px; margin-top:10px; max-height:240px; overflow:auto; padding:6px; }
   .levelButton { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; color:#222; background:rgba(255,255,255,0.9); pointer-events:auto; }
   .locked { filter:grayscale(1) opacity(0.6); cursor:not-allowed; pointer-events:none; }
-  @media (max-width:720px) { #hud .level { font-size:26px; padding:6px 12px; } }
+  #shopGrid { display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-top:10px; width:720px; max-width:95%; }
+  .skinCard { background: rgba(255,255,255,0.95); padding:10px; border-radius:12px; text-align:center; color:#222; pointer-events:auto; }
+  .skinPreview { width:64px; height:84px; margin:0 auto 8px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:700; box-shadow:0 6px 18px rgba(0,0,0,0.12); }
+  @media (max-width:720px) { #hud .level { font-size:26px; padding:6px 12px; } #shopGrid { grid-template-columns:repeat(2,1fr); } }
 </style>
 </head>
 <body>
@@ -50,11 +54,12 @@
 
   <div id="menu" class="menu">
     <h1 id="menuTitle">✨ Cute Platformer ✨</h1>
-    <p id="menuDesc">100 playable levels — spikes now sit on top of platforms (never floating). Reach the star to progress. Progress saves locally.</p>
+    <p id="menuDesc">100 playable levels — spikes are placed so there's always a safe path. Progress saves locally. Visit the Shop to buy skins with coins you collect.</p>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
       <button id="startBtn" class="btn primary">Start (Space)</button>
       <button id="openSelectBtn" class="btn alt">Level Select</button>
-      <button id="resetProgressBtn" class="btn" style="background:linear-gradient(180deg,#FFBDBD,#FF8A8A)">Reset Progress</button>
+      <button id="openShopBtn" class="btn alt">Shop</button>
+      <button id="resetProgressBtn" class="btn danger">Reset Progress</button>
     </div>
 
     <div id="levelSelect" style="display:none; margin-top:10px; width:760px; max-width:95%;">
@@ -65,20 +70,29 @@
       <div id="levelSelectGrid"></div>
     </div>
 
-    <p style="font-size:13px; opacity:0.9; margin-top:6px">If a level feels too hard, you can select any unlocked level from the Level Select. Progress is saved automatically.</p>
+    <div id="shopPanel" style="display:none; margin-top:10px; width:760px; max-width:95%; flex-direction:column; align-items:center;">
+      <div style="display:flex; width:100%; justify-content:space-between; align-items:center;">
+        <div style="font-weight:700;">Shop</div>
+        <div><button id="closeShopBtn" class="btn alt">Close</button></div>
+      </div>
+      <div style="margin-top:8px; font-size:13px; color:#222;">Spend coins to unlock skins. Equip from Owned tab.</div>
+      <div id="shopGrid"></div>
+    </div>
+
+    <p style="font-size:13px; opacity:0.9; margin-top:6px">If a level feels too hard, you can select any unlocked level from the Level Select. Progress is saved automatically, and skins persist across sessions.</p>
   </div>
 </div>
 
 <script>
-/* Cute Platformer — Spikes fixed (spikes placed on platforms as overlays)
-   Features preserved:
-   - 100 procedurally generated, reachable levels
-   - moving platforms, boost platforms, breaking platforms
-   - coins, star goal, particles, localStorage progress, level-select
-   - spikes are overlays on platforms (hasSpike property), never standalone
+/* Cute Platformer — Spike spacing + Shop
+   - Guarantees a reachable path by removing spike overlays when necessary.
+   - Adds Skin Shop: buy with coins, equip, persist in localStorage.
+   - All prior gameplay features retained.
 */
 
-/* CONFIG */
+/* ---------------------------
+   Configuration
+   --------------------------- */
 const LEVEL_COUNT = 100;
 const BASE_LEVEL_WIDTH = 1100;
 const EXTRA_WIDTH_PER_LEVEL = 40;
@@ -86,22 +100,68 @@ const EXTRA_WIDTH_PER_LEVEL = 40;
 const PLAYER_CONFIG = {
   w: 40, h: 52,
   speedAccel: 0.36,
-  maxSpeed: 6.3,
+  maxSpeed: 6.3,         // approximate horizontal speed per frame
   jumpStrength: 11.6,
   gravity: 0.5,
   coyoteTime: 140,
   jumpBuffer: 140
 };
 
-const PROB_BASE = { moving:0.08, boost:0.06, spikeOverlay:0.08, breaking:0.06 };
+// Base probabilities for platform types (moving/boost/breaking)
+const PROB_BASE = { moving:0.08, boost:0.06, breaking:0.06 };
+// Spike overlay base chance (per eligible platform)
+const SPIKE_OVERLAY_BASE = 0.08;
+
 const MOVING_SPEED_RANGE = [0.6,2.2];
 const MOVING_RANGE_MIN = 60;
 const BREAK_DELAY_MS = 420;
 const COIN_BASE = 6;
 
-const STORAGE_KEY = 'cute_platformer_save_v3';
+/* ---------------------------
+   Shop & Persistence
+   --------------------------- */
+const STORAGE_KEY = 'cute_platformer_save_shop_v1';
 
-/* Canvas & UI nodes */
+/* Shop skins — each skin: id, name, color, price.
+   The "default" is free and owned by default.
+*/
+const SKINS = [
+  { id:'default', name:'Sunbeam', color:'#FFD28A', price:0 },
+  { id:'mint', name:'Minty', color:'#C8FFD0', price:25 },
+  { id:'lavender', name:'Lavender', color:'#D8C6FF', price:45 },
+  { id:'peach', name:'Peach', color:'#FFDAC1', price:75 },
+  { id:'starlight', name:'Starlight', color:'#FFF59A', price:120 },
+];
+
+/* load/save structure:
+   {
+     highestUnlocked: 1..LEVEL_COUNT,
+     totalCoins: number,
+     ownedSkins: [ids...],
+     equippedSkin: 'id'
+   }
+*/
+function loadSave(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { highestUnlocked:1, totalCoins:0, ownedSkins:['default'], equippedSkin:'default' };
+    const p = JSON.parse(raw);
+    return {
+      highestUnlocked: Math.max(1, Math.min(LEVEL_COUNT, p.highestUnlocked || 1)),
+      totalCoins: p.totalCoins || 0,
+      ownedSkins: Array.isArray(p.ownedSkins) ? p.ownedSkins : ['default'],
+      equippedSkin: p.equippedSkin || 'default'
+    };
+  } catch {
+    return { highestUnlocked:1, totalCoins:0, ownedSkins:['default'], equippedSkin:'default' };
+  }
+}
+function saveProgress(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function resetProgress(){ localStorage.removeItem(STORAGE_KEY); save = { highestUnlocked:1, totalCoins:0, ownedSkins:['default'], equippedSkin:'default' }; applySaveUI(); buildShopGrid(); }
+
+/* ---------------------------
+   Canvas & UI nodes
+   --------------------------- */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 let W = canvas.width = innerWidth;
@@ -114,26 +174,20 @@ const progressChip = document.getElementById('progressChip');
 const menuEl = document.getElementById('menu');
 const startBtn = document.getElementById('startBtn');
 const openSelectBtn = document.getElementById('openSelectBtn');
+const openShopBtn = document.getElementById('openShopBtn');
 const resetProgressBtn = document.getElementById('resetProgressBtn');
 const levelSelect = document.getElementById('levelSelect');
 const closeSelectBtn = document.getElementById('closeSelectBtn');
 const levelSelectGrid = document.getElementById('levelSelectGrid');
+const shopPanel = document.getElementById('shopPanel');
+const closeShopBtn = document.getElementById('closeShopBtn');
+const shopGrid = document.getElementById('shopGrid');
 const menuTitle = document.getElementById('menuTitle');
 const menuDesc = document.getElementById('menuDesc');
 
-/* Persistence */
-function loadSave(){
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { highestUnlocked:1, totalCoins:0 };
-    const p = JSON.parse(raw);
-    return { highestUnlocked: Math.max(1, Math.min(LEVEL_COUNT, p.highestUnlocked||1)), totalCoins: p.totalCoins||0 };
-  } catch { return { highestUnlocked:1, totalCoins:0 }; }
-}
-function saveProgress(state){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function resetProgress(){ localStorage.removeItem(STORAGE_KEY); save = { highestUnlocked:1, totalCoins:0 }; applySaveUI(); }
-
-/* State */
+/* ---------------------------
+   State
+   --------------------------- */
 let save = loadSave();
 let currentLevelIndex = Math.max(0, Math.min(LEVEL_COUNT-1, save.highestUnlocked-1));
 let levels = [];
@@ -143,17 +197,24 @@ let paused = false;
 let lastFrame = performance.now();
 let coinsThisLevel = 0;
 
-/* Player & camera */
+/* ---------------------------
+   Player & camera
+   --------------------------- */
 const player = {
-  x:120,y:H-220,w:PLAYER_CONFIG.w,h:PLAYER_CONFIG.h,
-  vx:0,vy:0, speedAccel:PLAYER_CONFIG.speedAccel, maxSpeed:PLAYER_CONFIG.maxSpeed,
-  jumpStrength:PLAYER_CONFIG.jumpStrength, gravity:PLAYER_CONFIG.gravity,
+  x: 120, y: H - 220, w: 40, h: 52,
+  vx: 0, vy: 0,
+  speedAccel: PLAYER_CONFIG.speedAccel,
+  maxSpeed: PLAYER_CONFIG.maxSpeed,
+  jumpStrength: PLAYER_CONFIG.jumpStrength,
+  gravity: PLAYER_CONFIG.gravity,
   onGround:false, facing:1, coyoteTimer:0, jumpBufferTimer:0,
-  coyoteTime:PLAYER_CONFIG.coyoteTime, jumpBuffer:PLAYER_CONFIG.jumpBuffer
+  coyoteTime: PLAYER_CONFIG.coyoteTime, jumpBuffer: PLAYER_CONFIG.jumpBuffer
 };
 const camera = { x:0, y:0 };
 
-/* Input */
+/* ---------------------------
+   Input
+   --------------------------- */
 const keys = {};
 window.addEventListener('keydown', (e)=> {
   keys[e.key.toLowerCase()] = true;
@@ -163,51 +224,53 @@ window.addEventListener('keydown', (e)=> {
 });
 window.addEventListener('keyup', (e)=> keys[e.key.toLowerCase()] = false);
 
-/* Helpers */
+/* ---------------------------
+   Helpers
+   --------------------------- */
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 function randRange(a,b){ return a + Math.random()*(b-a); }
 function randInt(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
 
-/* Conservative reach calculation (used to avoid unreachable gaps) */
+/* Conservative horizontal reach used to cap gaps.
+   Uses a conservative multiplier so jumps remain achievable.
+*/
 function computeConservativeMaxGap(){
-  const frames = 2 * PLAYER_CONFIG.jumpStrength / PLAYER_CONFIG.gravity; // approx frames in air
+  const frames = 2 * PLAYER_CONFIG.jumpStrength / PLAYER_CONFIG.gravity;
   const reach = PLAYER_CONFIG.maxSpeed * frames;
-  return Math.round(clamp(reach * 0.78, 140, 700)); // conservative factor
+  return Math.round(clamp(reach * 0.78, 140, 700));
 }
 
-/* Generate levels: platforms will be of types: normal, moving, boost, breaking. Spikes will be assigned as an overlay (hasSpike) after generation. */
+/* ---------------------------
+   Level generation with spike overlay + reachability check
+   --------------------------- */
 function generateLevels(){
   levels.length = 0;
+  const conservativeMaxGap = computeConservativeMaxGap();
   for (let i=0;i<LEVEL_COUNT;i++){
-    const difficulty = i / (LEVEL_COUNT-1);
-    const width = Math.round(BASE_LEVEL_WIDTH + i * EXTRA_WIDTH_PER_LEVEL + Math.random()*360);
+    const difficulty = i / (LEVEL_COUNT - 1);
+    const width = Math.round(BASE_LEVEL_WIDTH + i * EXTRA_WIDTH_PER_LEVEL + Math.random()*420);
     const baseY = H - 80;
     const platforms = [];
-
-    // start platform
-    platforms.push({ x:0, y: baseY - 18, w: Math.min(600, 260 + Math.round(200 - difficulty*120)), h:20, type:'normal' });
-
-    const conservativeMaxGap = computeConservativeMaxGap();
+    // start
+    platforms.push({ x:0, y: baseY - 18, w: Math.min(600, 260 + Math.round(200 - difficulty*120)), h:20, type:'normal', hasSpike:false });
     const maxVerticalStep = Math.round(220 + difficulty * 120);
     let cursor = 300;
-    const segments = 7 + Math.round(difficulty*16);
+    const segments = 7 + Math.round(difficulty * 16);
 
     for (let seg=0; seg<segments && cursor < width - 260; seg++){
       const pCount = 1 + Math.floor(Math.random()*2);
       for (let p=0;p<pCount && cursor < width - 200; p++){
-        // pick type (no standalone 'spike' type here)
         let type = 'normal';
         const r = Math.random();
         const movingChance = PROB_BASE.moving + difficulty*0.08;
         const boostChance = PROB_BASE.boost + difficulty*0.04;
-        const breakingChance = PROB_BASE.breaking + difficulty*0.05;
+        const breakingChance = PROB_BASE.breaking + difficulty*0.04;
 
         if (r < movingChance) type = 'moving';
         else if (r < movingChance + boostChance) type = 'boost';
         else if (r < movingChance + boostChance + breakingChance) type = 'breaking';
-        // else normal
 
-        // placement with retries to keep reachable
+        // placement with retries
         let attempts = 0;
         let placed = false;
         let px=0, py=0, pw=0;
@@ -221,17 +284,14 @@ function generateLevels(){
           const yVariation = Math.round(Math.random() * (maxVerticalStep));
           py = Math.max(120, Math.min(baseY - 20, prev.y - Math.round(60 - Math.random()*120) + yVariation - (Math.random()*60)));
           const dx = px - (prev.x + prev.w);
-          // Rules to accept placement:
           if (dx <= conservativeMaxGap) { placed = true; break; }
-          // allow a slightly larger gap if either platform is boost (player can jump farther)
           if ((prev && prev.type === 'boost') && dx <= conservativeMaxGap * 1.22) { placed = true; break; }
           if ((type === 'boost') && dx <= conservativeMaxGap * 1.22) { placed = true; break; }
-          // otherwise reduce gap and retry, and as a last resort clamp
           gap = Math.max(80, Math.round(gap * 0.7));
           cursor -= Math.round((Math.random()*16));
           if (attempts > 100) { px = prev.x + prev.w + Math.round(conservativeMaxGap * (0.9 + Math.random()*0.05)); placed = true; break; }
         }
-        const plat = { x:px, y:py, w:pw, h:18, type };
+        const plat = { x:px, y:py, w:pw, h:18, type, hasSpike:false };
         if (type === 'moving') {
           if (Math.random() < 0.76) {
             const range = Math.round(MOVING_RANGE_MIN + Math.random()*Math.max(80, conservativeMaxGap*0.28 + difficulty*120));
@@ -252,22 +312,21 @@ function generateLevels(){
       cursor += 200 + Math.round(Math.random() * (120 + difficulty * 420));
     }
 
-    // final platform & safety: ensure final goal reachable
+    // final platform
     let lastPlat = platforms[platforms.length-1];
     let finalX = Math.max(cursor + 100, width - 360);
     let finalY = Math.max(120, Math.min(baseY - 20, lastPlat.y - 10 - Math.round(difficulty * 120)));
     const dxFinal = finalX - (lastPlat.x + lastPlat.w);
-    if (dxFinal > computeConservativeMaxGap()) {
-      // insert a boost platform so the final is reachable
-      const boostX = lastPlat.x + lastPlat.w + Math.round(computeConservativeMaxGap() * 0.6);
-      platforms.push({ x:boostX, y: lastPlat.y - Math.round(30 + Math.random()*40), w:140, h:18, type:'boost', boost:{multiplier:1.55} });
+    if (dxFinal > conservativeMaxGap) {
+      const boostX = lastPlat.x + lastPlat.w + Math.round(conservativeMaxGap * 0.6);
+      platforms.push({ x:boostX, y: lastPlat.y - Math.round(30 + Math.random()*40), w:140, h:18, type:'boost', boost:{multiplier:1.55}, hasSpike:false });
       finalX = boostX + 220;
       finalY = Math.max(120, Math.min(baseY - 20, platforms[platforms.length-1].y - 40));
     }
-    const finalPlat = { x: finalX, y: finalY, w:240, h:22, type:'normal' };
+    const finalPlat = { x: finalX, y: finalY, w:240, h:22, type:'normal', hasSpike:false };
     platforms.push(finalPlat);
 
-    // Coins
+    // coins
     const coins = [];
     const coinCount = COIN_BASE + Math.round(difficulty * 10);
     for (let c=0;c<coinCount;c++){
@@ -277,52 +336,212 @@ function generateLevels(){
       coins.push({ x:cx, y:cy, r:8, collected:false });
     }
 
-    // STAR
-    const star = { x: finalPlat.x + finalPlat.w/2, y: finalPlat.y - 44, r:18 };
+    const star = { x: finalPlat.x + finalPlat.w/2, y: finalPlat.y - 44, r: 18 };
 
-    // Spike overlay assignment: iterate platforms and set hasSpike flag
-    // Rules: do NOT place spikes on first (start) or final platform, avoid tiny platforms, avoid boost & breaking platforms, keep chance scaled by difficulty
-    const spikeChanceScaled = PROB_BASE.spikeOverlay + difficulty * 0.05;
+    // Spike overlay assignment (initial pass)
+    const spikeChanceScaled = SPIKE_OVERLAY_BASE + difficulty * 0.05;
     for (let pi = 1; pi < platforms.length - 1; pi++) {
       const p = platforms[pi];
       p.hasSpike = false;
-      if (p.type === 'boost' || p.type === 'breaking') continue; // don't put spikes on boost/breaking
-      if (p.w < 80) continue; // too small to reliably land on with spikes
+      // never place on boost/breaking or start/final or tiny platforms
+      if (p.type === 'boost' || p.type === 'breaking') continue;
+      if (p.w < 80) continue;
       if (Math.random() < spikeChanceScaled) {
-        // ensure spike won't be placed too high (avoid unreachable situations)
-        // If the platform is much higher than the previous platform, skip spike to avoid instant death
+        // ensure not extremely high relative to previous platform (avoid unfair on high ledge)
         const prev = platforms[Math.max(0, pi - 1)];
         if (Math.abs(p.y - prev.y) > 180) continue;
         p.hasSpike = true;
       }
     }
 
+    // Now ensure spikes do not block progression:
+    // Build graph of reachability ignoring spiked platforms.
+    const reachable = ensureReachablePath(platforms, conservativeMaxGap);
+    // if not reachable, ensureReachablePath will remove spikes until path exists.
     levels.push({ platforms, coins, star, width: Math.max(width, finalPlat.x + finalPlat.w + 100), baseY });
   }
-} // generateLevels
+}
 
+/* Graph reachability check (platform-level)
+   - nodes = platform indices
+   - edge i->j exists if player could jump from platform i to j using conservative rules
+   - treat platforms with hasSpike==true as blocked; try removing spikes until path exists
+*/
+function ensureReachablePath(platforms, conservativeMaxGap) {
+  function canJump(from, to) {
+    // from, to are platform objects
+    if (!from || !to) return false;
+    // horizontal gap from right edge of from to left edge of to
+    const dx = to.x - (from.x + from.w);
+    if (dx < -10) return false; // overlapping backwards
+    if (dx > conservativeMaxGap) return false;
+    // height difference
+    const dy = to.y - from.y;
+    // allow some vertical difference (player can jump up some)
+    if (dy < -260) return false; // too high up above
+    if (dy > 380) return false;  // too far down (shouldn't matter)
+    return true;
+  }
+
+  // build adjacency for the level
+  const n = platforms.length;
+  function buildAdj(blockSpikes) {
+    const adj = Array.from({length:n}, ()=>[]);
+    for (let i=0;i<n;i++){
+      for (let j=i+1;j<n;j++){
+        if (!canJump(platforms[i], platforms[j])) continue;
+        // If target platform is marked as spike AND we're treating spikes as blocked, then don't add
+        if (blockSpikes && platforms[j].hasSpike) continue;
+        adj[i].push(j);
+      }
+    }
+    return adj;
+  }
+
+  function bfs(adj) {
+    const q = [0];
+    const visited = new Array(n).fill(false); visited[0]=true;
+    while (q.length){
+      const u = q.shift();
+      if (u === n-1) return true;
+      for (const v of adj[u]) {
+        if (!visited[v]) { visited[v]=true; q.push(v); }
+      }
+    }
+    return false;
+  }
+
+  // First test: graph with spike platforms treated as blocked
+  let adj = buildAdj(true);
+  if (bfs(adj)) return true;
+
+  // If blocked, progressively remove spikes until BFS succeeds.
+  // Strategy: remove spikes starting from earlier platforms (closer to start) to open paths.
+  // We'll create a list of candidate spike platforms (excluding start/final)
+  const spikeIndices = [];
+  for (let i=1;i<n-1;i++){
+    if (platforms[i].hasSpike) spikeIndices.push(i);
+  }
+  // sort by distance from start (prefer removing spikes earlier so player can progress)
+  spikeIndices.sort((a,b)=> a - b);
+
+  // Iteratively remove spikes until path becomes reachable or we ran out
+  for (let idx of spikeIndices) {
+    platforms[idx].hasSpike = false;
+    adj = buildAdj(true);
+    if (bfs(adj)) return true;
+  }
+
+  // As a last fallback, if still blocked, remove all spikes and return true (should not happen often)
+  for (let i=1;i<n-1;i++) platforms[i].hasSpike = false;
+  return true;
+}
+
+/* Generate levels now (calls ensureReachablePath so we get safe spike placement) */
 generateLevels();
 
-/* Deep copy & load level for play */
+/* ---------------------------
+   Load level (deep copy)
+   --------------------------- */
 function loadLevel(index){
   currentLevelIndex = clamp(index, 0, LEVEL_COUNT-1);
   level = JSON.parse(JSON.stringify(levels[currentLevelIndex]));
+  // re-init runtime fields for moving/breaking platforms
   for (const p of level.platforms) {
     if (p.moving) { p.x = p.startX; p.y = p.startY; p._dir = 1; p._offset = 0; }
     if (p.breaking) { p.breaking.stepping = false; p.breaking.timer = 0; p._gone = false; }
   }
-  level.coins.forEach(c => c.collected = false);
-  player.x = 120; player.y = H - 220; player.vx = 0; player.vy = 0; player.onGround = false;
+  level.coins.forEach(c=> c.collected = false);
+  player.x = 120; player.y = H - 220; player.vx = 0; player.vy = 0; player.onGround=false;
   player.coyoteTimer = 0; player.jumpBufferTimer = 0;
   coinsThisLevel = 0; camera.x = 0;
   updateHUD();
 }
 
-/* HUD & UI */
-function applySaveUI(){ progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1); coinChip.textContent = 'Coins: ' + ((save.totalCoins||0) + coinsThisLevel); }
-function updateHUD(){ levelDisplay.textContent = `Level ${currentLevelIndex + 1} / ${LEVEL_COUNT}`; coinChip.textContent = 'Coins: ' + ((save.totalCoins||0) + coinsThisLevel); progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1); }
+/* ---------------------------
+   HUD, UI & Shop rendering logic
+   --------------------------- */
+function applySaveUI(){
+  progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1);
+  coinChip.textContent = 'Coins: ' + ((save.totalCoins || 0) + coinsThisLevel);
+}
+function updateHUD(){
+  levelDisplay.textContent = `Level ${currentLevelIndex + 1} / ${LEVEL_COUNT}`;
+  coinChip.textContent = 'Coins: ' + ((save.totalCoins || 0) + coinsThisLevel);
+  progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1);
+}
 
-/* Collision / physics helpers */
+/* Build level select grid */
+function buildLevelSelectGrid(){
+  levelSelectGrid.innerHTML = '';
+  for (let i=0;i<LEVEL_COUNT;i++){
+    const btn = document.createElement('div');
+    btn.className = 'levelButton';
+    btn.textContent = i+1;
+    if (i+1 > (save.highestUnlocked || 1)) btn.classList.add('locked');
+    else btn.addEventListener('click', ()=> { currentLevelIndex = i; startGame(); });
+    levelSelectGrid.appendChild(btn);
+  }
+}
+
+/* Build shop UI grid */
+function buildShopGrid(){
+  shopGrid.innerHTML = '';
+  for (const skin of SKINS) {
+    const card = document.createElement('div');
+    card.className = 'skinCard';
+    const preview = document.createElement('div');
+    preview.className = 'skinPreview';
+    preview.style.background = skin.color;
+    preview.style.color = '#222';
+    preview.textContent = skin.name.split('')[0]; // single letter as cute preview
+    const title = document.createElement('div');
+    title.textContent = skin.name;
+    title.style.fontWeight = '700';
+    title.style.marginTop = '6px';
+    const price = document.createElement('div');
+    price.textContent = skin.price === 0 ? 'Free' : `${skin.price} coins`;
+    price.style.marginTop = '6px';
+    const btn = document.createElement('button');
+    btn.className = 'btn alt';
+    btn.style.marginTop = '8px';
+    // Owned?
+    const owned = (save.ownedSkins || []).includes(skin.id);
+    if (owned) {
+      btn.textContent = (save.equippedSkin === skin.id) ? 'Equipped' : 'Equip';
+      btn.addEventListener('click', ()=> {
+        save.equippedSkin = skin.id;
+        saveProgress(save);
+        applySaveUI();
+        buildShopGrid();
+      });
+    } else {
+      btn.textContent = 'Buy';
+      btn.addEventListener('click', ()=> {
+        const totalCoins = save.totalCoins || 0;
+        if (skin.price <= totalCoins) {
+          save.totalCoins = totalCoins - skin.price;
+          (save.ownedSkins || (save.ownedSkins=[])).push(skin.id);
+          save.equippedSkin = skin.id;
+          saveProgress(save);
+          applySaveUI();
+          buildShopGrid();
+        } else {
+          alert('Not enough coins to buy this skin.');
+        }
+      });
+    }
+    card.appendChild(preview);
+    card.appendChild(title);
+    card.appendChild(price);
+    card.appendChild(btn);
+    shopGrid.appendChild(card);
+  }
+}
+
+/* ---------------------------
+   Collision helpers (same as before)
+   --------------------------- */
 function rectIntersects(a,b){ return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h); }
 function resolveCollision(px,py,pw,ph,plat){
   const p = {x:px,y:py,w:pw,h:ph}, q = {x:plat.x,y:plat.y,w:plat.w,h:plat.h};
@@ -335,16 +554,54 @@ function resolveCollision(px,py,pw,ph,plat){
   return { side:'right', x: q.x + q.w };
 }
 
-/* Particles */
+/* ---------------------------
+   Particles
+   --------------------------- */
 const particles = [];
-function spawnParticles(x,y,color,count=8){ for (let i=0;i<count;i++){ particles.push({ x,y, vx: randRange(-1.6,1.6), vy: randRange(-3.2,-0.6), life:420 + Math.random()*220, color, size:2 + Math.random()*3 }); } }
-function updateParticles(dt){ for (let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life -= dt; if (p.life <= 0){ particles.splice(i,1); continue; } p.vy += 0.06 * (dt/16.67); p.x += p.vx * (dt/16.67); p.y += p.vy * (dt/16.67); } }
+function spawnParticles(x,y,color,count=8){
+  for (let i=0;i<count;i++){
+    particles.push({
+      x,y,
+      vx: randRange(-1.6,1.6),
+      vy: randRange(-3.2,-0.6),
+      life: 420 + Math.random()*220,
+      color, size: 2 + Math.random()*3
+    });
+  }
+}
+function updateParticles(dt){
+  for (let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0) { particles.splice(i,1); continue; }
+    p.vy += 0.06 * (dt/16.67);
+    p.x += p.vx * (dt/16.67);
+    p.y += p.vy * (dt/16.67);
+  }
+}
 
-/* Game loop & logic */
-function startGame(){ if (currentLevelIndex + 1 > save.highestUnlocked) currentLevelIndex = save.highestUnlocked - 1; loadLevel(currentLevelIndex); running = true; paused = false; menuEl.style.display = 'none'; lastFrame = performance.now(); requestAnimationFrame(loop); }
+/* ---------------------------
+   Game update & drawing
+   --------------------------- */
+function startGame(){
+  if (currentLevelIndex + 1 > save.highestUnlocked) currentLevelIndex = save.highestUnlocked - 1;
+  loadLevel(currentLevelIndex);
+  running = true; paused = false;
+  menuEl.style.display = 'none';
+  lastFrame = performance.now();
+  requestAnimationFrame(loop);
+}
 function restartLevel(){ loadLevel(currentLevelIndex); running = true; paused = false; menuEl.style.display = 'none'; }
-function goToMenu(title,msg){ running=false; paused=false; menuEl.style.display='flex'; menuTitle.textContent = title; menuDesc.textContent = msg; buildLevelSelectGrid(); }
-function loop(now){ if (!running) return; const dt = Math.min(40, now - lastFrame); lastFrame = now; if (!paused) update(dt); draw(); if (running) requestAnimationFrame(loop); }
+function goToMenu(title,msg){ running=false; paused=false; menuEl.style.display='flex'; menuTitle.textContent = title; menuDesc.textContent = msg; buildLevelSelectGrid(); buildShopGrid(); }
+
+function loop(now){
+  if (!running) return;
+  const dt = Math.min(40, now - lastFrame);
+  lastFrame = now;
+  if (!paused) update(dt);
+  draw();
+  if (running) requestAnimationFrame(loop);
+}
 
 function update(dt){
   const left = keys['arrowleft'] || keys['a'];
@@ -366,10 +623,11 @@ function update(dt){
   player.x += player.vx;
   player.y += player.vy;
 
+  // clamp X
   if (player.x < -40) player.x = -40;
   if (player.x > level.width - player.w + 40) player.x = level.width - player.w + 40;
 
-  // move platforms & handle breaking timers
+  // update moving platforms & breaking timers
   for (const p of level.platforms){
     if (p._gone) continue;
     if (p.type === 'moving' && p.moving){
@@ -389,16 +647,17 @@ function update(dt){
     if (res.side === 'top'){
       player.y = res.y; player.vy = 0; player.onGround = true; standingOn = p; player.coyoteTimer = player.coyoteTime;
       if (p.type === 'moving' && p.moving && p.moving.axis === 'x') player.x += p.moving.speed * p._dir;
-      if (p.type === 'breaking' && p.breaking && !p.breaking.stepping){ p.breaking.stepping = true; p.breaking.timer = BREAK_DELAY_MS; }
-      // spike on top -> death instantly
+      if (p.type === 'breaking' && p.breaking && !p.breaking.stepping) { p.breaking.stepping = true; p.breaking.timer = BREAK_DELAY_MS; }
+      // if there are spikes on this platform, landing means death
       if (p.hasSpike) { goToMenu('Ouch — spike!', 'You landed on spikes. Back to menu.'); return; }
     } else if (res.side === 'bottom') { player.y = res.y; player.vy = Math.max(0, player.vy); }
     else if (res.side === 'left') { player.x = res.x; player.vx = Math.min(0, player.vx); }
     else { player.x = res.x; player.vx = Math.max(0, player.vx); }
   }
 
-  // APPLY boosted jump if standing on boost platform at moment of jump
+  // compute effective jump strength if standing on boost
   const effectiveJumpStrength = (standingOn && standingOn.type === 'boost' && standingOn.boost) ? (PLAYER_CONFIG.jumpStrength * standingOn.boost.multiplier) : PLAYER_CONFIG.jumpStrength;
+
   if (player.jumpBufferTimer > 0 && (player.onGround || player.coyoteTimer > 0)) {
     player.vy = -effectiveJumpStrength;
     player.onGround = false;
@@ -410,41 +669,52 @@ function update(dt){
   // coins
   for (const c of level.coins){
     if (c.collected) continue;
-    const dx = (player.x + player.w/2) - c.x, dy = (player.y + player.h/2) - c.y;
+    const dx = (player.x + player.w/2) - c.x;
+    const dy = (player.y + player.h/2) - c.y;
     const d = Math.sqrt(dx*dx + dy*dy);
-    if (d < c.r + Math.max(player.w, player.h)/3){ c.collected = true; coinsThisLevel++; save.totalCoins = (save.totalCoins || 0) + 1; saveProgress(save); spawnParticles(c.x,c.y,'#FFD66B',10); updateHUD(); }
+    if (d < c.r + Math.max(player.w, player.h)/3) {
+      c.collected = true;
+      coinsThisLevel++;
+      save.totalCoins = (save.totalCoins || 0) + 1;
+      saveProgress(save);
+      spawnParticles(c.x, c.y, '#FFD66B', 10);
+      updateHUD();
+    }
   }
 
-  // star
+  // star / goal
   const star = level.star;
-  const playerRect = { x:player.x, y:player.y, w:player.w, h:player.h };
+  const playerRect = { x: player.x, y: player.y, w: player.w, h: player.h };
   const starRect = { x: star.x - star.r, y: star.y - star.r, w: star.r*2, h: star.r*2 };
   if (rectIntersects(playerRect, starRect)) {
     if (save.highestUnlocked < currentLevelIndex + 2) { save.highestUnlocked = Math.min(LEVEL_COUNT, currentLevelIndex + 2); }
     saveProgress(save); applySaveUI();
-    if (currentLevelIndex < LEVEL_COUNT - 1) { currentLevelIndex++; loadLevel(currentLevelIndex); } else { goToMenu('You cleared all levels! 🎉', 'Amazing — you finished all levels.'); }
+    if (currentLevelIndex < LEVEL_COUNT - 1) { currentLevelIndex++; loadLevel(currentLevelIndex); }
+    else { goToMenu('You cleared all levels! 🎉', 'Amazing — you finished all levels.'); }
     return;
   }
 
-  // side/overlap spike detection: touching spike area (top of a platform) even if not landed exactly on top
+  // side spike detection (touching spike area)
   for (const p of level.platforms){
     if (!p.hasSpike) continue;
-    // create a slightly larger spike rectangle so side hits count
     const spikeRect = { x: p.x, y: p.y - 6, w: p.w, h: p.h + 8 };
     if (rectIntersects(playerRect, spikeRect)) { goToMenu('Ouch — spike!', 'You touched spikes. Back to menu.'); return; }
   }
 
-  // falling off
+  // falling
   if (player.y > H + 160) { goToMenu('You fell! 😿', 'You fell from the level. Back to the menu.'); return; }
 
   // camera smoothing
-  const targetCamX = Math.max(0, player.x - W*0.35);
+  const targetCamX = Math.max(0, player.x - W * 0.35);
   camera.x += (targetCamX - camera.x) * 0.12;
 
-  updateParticles(dt); updateHUD();
+  updateParticles(dt);
+  updateHUD();
 }
 
-/* DRAWING */
+/* ---------------------------
+   Drawing
+   --------------------------- */
 function drawRoundedRect(x,y,w,h,r=10){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fill(); }
 function drawStar(cx,cy,r,spikes=6){ ctx.save(); ctx.beginPath(); const outer=r, inner=r*0.5; let rot=Math.PI/2*3; let x=cx,y=cy; const step=Math.PI/spikes; ctx.moveTo(cx,cy-outer); for(let i=0;i<spikes;i++){ x=cx+Math.cos(rot)*outer; y=cy+Math.sin(rot)*outer; ctx.lineTo(x,y); rot+=step; x=cx+Math.cos(rot)*inner; y=cy+Math.sin(rot)*inner; ctx.lineTo(x,y); rot+=step;} ctx.closePath(); ctx.fill(); ctx.restore(); }
 function drawCoin(x,y,r){ ctx.beginPath(); ctx.ellipse(x,y,r*1.1,r,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1; ctx.stroke(); ctx.strokeStyle='transparent'; }
@@ -459,7 +729,7 @@ function draw(){
 
   ctx.save(); ctx.translate(-Math.round(camera.x), 0);
 
-  // draw platforms
+  // platforms
   for (const p of level.platforms){
     if (p._gone) continue;
     let color = '#CDE8FF';
@@ -468,8 +738,6 @@ function draw(){
     if (p.type === 'breaking') color = '#FFE3BF';
     ctx.fillStyle = color; drawRoundedRect(p.x, p.y, p.w, p.h, 10);
     ctx.fillStyle = 'rgba(255,255,255,0.12)'; drawRoundedRect(p.x+6, p.y+2, Math.max(0,p.w-12), 6, 6);
-
-    // draw spike overlay if present
     if (p.hasSpike) {
       const spikeCount = Math.max(3, Math.round(p.w/26));
       ctx.fillStyle = '#FF5A5A';
@@ -478,12 +746,11 @@ function draw(){
         const sw = Math.min(18, (p.w-12) / spikeCount);
         ctx.beginPath(); ctx.moveTo(sx - sw/2, p.y + p.h); ctx.lineTo(sx, p.y + p.h - Math.min(22, sw*1.2)); ctx.lineTo(sx + sw/2, p.y + p.h); ctx.closePath(); ctx.fill();
       }
-      // small caution icon
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '12px Arial'; ctx.fillText('!', p.x + p.w - 22, p.y + p.h - 6);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font='12px Arial'; ctx.fillText('!', p.x + p.w - 22, p.y + p.h - 6);
     } else {
-      if (p.type==='moving' && p.moving){ ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='12px Arial'; if (p.moving.axis==='x') ctx.fillText('⇄', p.x + p.w - 20, p.y + p.h - 6); else ctx.fillText('⇅', p.x + p.w - 20, p.y + p.h - 6); }
-      if (p.type==='boost'){ ctx.fillStyle='rgba(20,200,120,0.9)'; ctx.beginPath(); ctx.arc(p.x + 16, p.y + p.h/2, 8, 0, Math.PI*2); ctx.fill(); ctx.fillStyle='white'; ctx.font='12px Arial'; ctx.fillText('↑', p.x + 12, p.y + p.h/2 + 4); }
-      if (p.type==='breaking' && p.breaking && p.breaking.stepping){ const frac = Math.max(0, Math.min(1, p.breaking.timer / BREAK_DELAY_MS)); ctx.fillStyle = `rgba(210,80,20,${1-frac})`; drawRoundedRect(p.x, p.y, p.w, p.h, 10); }
+      if (p.type === 'moving' && p.moving){ ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='12px Arial'; if (p.moving.axis==='x') ctx.fillText('⇄', p.x + p.w - 20, p.y + p.h - 6); else ctx.fillText('⇅', p.x + p.w - 20, p.y + p.h - 6); }
+      if (p.type === 'boost'){ ctx.fillStyle='rgba(20,200,120,0.9)'; ctx.beginPath(); ctx.arc(p.x + 16, p.y + p.h/2, 8, 0, Math.PI*2); ctx.fill(); ctx.fillStyle='white'; ctx.font='12px Arial'; ctx.fillText('↑', p.x + 12, p.y + p.h/2 + 4); }
+      if (p.type === 'breaking' && p.breaking && p.breaking.stepping){ const frac = Math.max(0, Math.min(1, p.breaking.timer / BREAK_DELAY_MS)); ctx.fillStyle = `rgba(210,80,20,${1-frac})`; drawRoundedRect(p.x, p.y, p.w, p.h, 10); }
     }
   }
 
@@ -491,12 +758,15 @@ function draw(){
   for (const c of level.coins){ if (c.collected) continue; ctx.fillStyle = '#FFD66B'; drawCoin(c.x, c.y, c.r); ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(c.x - c.r*0.18, c.y - c.r*0.28, c.r*0.26, c.r*0.09, 0, 0, Math.PI*2); ctx.fill(); }
 
   // star
-  ctx.save(); ctx.translate(level.star.x, level.star.y); const spin = (performance.now() / 500) % (Math.PI*2); ctx.rotate(spin); ctx.fillStyle = '#FFF59A'; drawStar(0,0,level.star.r,6); ctx.fillStyle='#FFD54A'; ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(level.star.x, level.star.y); const spin = (performance.now() / 500) % (Math.PI*2); ctx.rotate(spin); ctx.fillStyle = '#FFF59A'; drawStar(0,0,level.star.r,6); ctx.fillStyle = '#FFD54A'; ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill(); ctx.restore();
 
-  // player
-  ctx.fillStyle='#FFD28A'; drawRoundedRect(player.x, player.y, player.w, player.h, 10);
-  ctx.fillStyle='#2B2B2B'; ctx.beginPath(); ctx.ellipse(player.x + player.w*0.32, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2); ctx.ellipse(player.x + player.w*0.68, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle='rgba(255,105,135,0.12)'; ctx.beginPath(); ctx.ellipse(player.x + player.w*0.2, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(player.x + player.w*0.8, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+  // draw player using equipped skin color
+  const skin = SKINS.find(s => s.id === (save.equippedSkin || 'default')) || SKINS[0];
+  ctx.fillStyle = skin.color || '#FFD28A';
+  drawRoundedRect(player.x, player.y, player.w, player.h, 10);
+  ctx.fillStyle = '#2B2B2B'; ctx.beginPath(); ctx.ellipse(player.x + player.w*0.32, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2); ctx.ellipse(player.x + player.w*0.68, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,105,135,0.12)'; ctx.beginPath(); ctx.ellipse(player.x + player.w*0.2, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(player.x + player.w*0.8, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill();
 
   // particles
   for (const p of particles){ ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life/600); ctx.fillRect(p.x, p.y, p.size, p.size); ctx.globalAlpha = 1; }
@@ -506,21 +776,77 @@ function draw(){
   if (paused) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0,0,W,H); ctx.fillStyle = '#fff'; ctx.font='44px Poppins, Arial'; ctx.textAlign='center'; ctx.fillText('PAUSED', W/2, H/2 - 8); ctx.font='14px Arial'; ctx.fillText('Press P to resume', W/2, H/2 + 22); }
 }
 
-/* Level select builder */
-function buildLevelSelectGrid(){ levelSelectGrid.innerHTML = ''; for (let i=0;i<LEVEL_COUNT;i++){ const btn = document.createElement('div'); btn.className='levelButton'; btn.textContent = i+1; if (i+1 > (save.highestUnlocked||1)) btn.classList.add('locked'); else btn.addEventListener('click', ()=> { currentLevelIndex = i; startGame(); }); levelSelectGrid.appendChild(btn); } }
+/* ---------------------------
+   Level select & shop initialization
+   --------------------------- */
+function buildShopGrid(){
+  shopGrid.innerHTML = '';
+  for (const skin of SKINS) {
+    const card = document.createElement('div'); card.className = 'skinCard';
+    const preview = document.createElement('div'); preview.className = 'skinPreview'; preview.style.background = skin.color; preview.textContent = skin.name[0];
+    const title = document.createElement('div'); title.textContent = skin.name; title.style.fontWeight = '700'; title.style.marginTop = '6px';
+    const price = document.createElement('div'); price.textContent = skin.price === 0 ? 'Free' : `${skin.price} coins`; price.style.marginTop = '6px';
+    const btn = document.createElement('button'); btn.className = 'btn alt'; btn.style.marginTop = '8px';
+    const owned = (save.ownedSkins || []).includes(skin.id);
+    if (owned) {
+      btn.textContent = (save.equippedSkin === skin.id) ? 'Equipped' : 'Equip';
+      btn.addEventListener('click', ()=> { save.equippedSkin = skin.id; saveProgress(save); applySaveUI(); buildShopGrid(); });
+    } else {
+      btn.textContent = 'Buy';
+      btn.addEventListener('click', ()=> {
+        const total = save.totalCoins || 0;
+        if (skin.price <= total) {
+          save.totalCoins = total - skin.price;
+          (save.ownedSkins || (save.ownedSkins=[])).push(skin.id);
+          save.equippedSkin = skin.id;
+          saveProgress(save);
+          applySaveUI();
+          buildShopGrid();
+        } else {
+          alert('Not enough coins.');
+        }
+      });
+    }
+    card.appendChild(preview); card.appendChild(title); card.appendChild(price); card.appendChild(btn);
+    shopGrid.appendChild(card);
+  }
+}
 
-/* Start / restart / handlers */
+/* ---------------------------
+   UI event wiring
+   --------------------------- */
 startBtn.addEventListener('click', ()=> startGame());
-openSelectBtn.addEventListener('click', ()=> { levelSelect.style.display = levelSelect.style.display === 'flex' ? 'none' : 'flex'; });
+openSelectBtn.addEventListener('click', ()=> { levelSelect.style.display = levelSelect.style.display === 'flex' ? 'none' : 'flex'; buildLevelSelectGrid(); });
 closeSelectBtn.addEventListener('click', ()=> levelSelect.style.display = 'none');
-resetProgressBtn.addEventListener('click', ()=> { if (confirm('Reset saved progress? This unlocks only level 1 and clears coins.')) { resetProgress(); buildLevelSelectGrid(); applySaveUI(); menuTitle.textContent='✨ Cute Platformer ✨'; menuDesc.textContent='Progress reset. Press Start to play.'; } });
+openShopBtn.addEventListener('click', ()=> { shopPanel.style.display = shopPanel.style.display === 'flex' ? 'none' : 'flex'; buildShopGrid(); });
+closeShopBtn.addEventListener('click', ()=> shopPanel.style.display = 'none');
+resetProgressBtn.addEventListener('click', ()=> { if (confirm('Reset saved progress? This unlocks only level 1 and clears coins and skins.')) { resetProgress(); buildLevelSelectGrid(); buildShopGrid(); applySaveUI(); menuTitle.textContent = '✨ Cute Platformer ✨'; menuDesc.textContent = 'Progress reset. Press Start to play.'; } });
 
-function restartLevel(){ loadLevel(currentLevelIndex); running=true; paused=false; menuEl.style.display='none'; }
+function buildLevelSelectGrid(){
+  levelSelectGrid.innerHTML = '';
+  for (let i=0;i<LEVEL_COUNT;i++){
+    const btn = document.createElement('div'); btn.className = 'levelButton'; btn.textContent = i+1;
+    if (i+1 > (save.highestUnlocked || 1)) btn.classList.add('locked');
+    else btn.addEventListener('click', ()=> { currentLevelIndex = i; startGame(); });
+    levelSelectGrid.appendChild(btn);
+  }
+}
 
-/* init */
-applySaveUI(); buildLevelSelectGrid(); menuEl.style.display='flex'; menuTitle.textContent='✨ Cute Platformer ✨'; menuDesc.textContent='100 playable levels — spikes placed on platforms.';
+/* ---------------------------
+   Init & ready
+   --------------------------- */
+applySaveUI = function(){ progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1); coinChip.textContent = 'Coins: ' + ((save.totalCoins || 0) + coinsThisLevel); };
+applySaveUI();
+buildLevelSelectGrid();
+buildShopGrid();
+menuEl.style.display = 'flex';
+menuTitle.textContent = '✨ Cute Platformer ✨';
+menuDesc.textContent = '100 playable levels — spikes are placed safely; buy skins from the Shop with coins you collect.';
 
-/* debug: start automatically */
+// helper aliases to preserve previous function names
+function restartLevel(){ loadLevel(currentLevelIndex); running = true; paused = false; menuEl.style.display = 'none'; }
+
+// (debug) auto-start
 // startGame();
 
 </script>
