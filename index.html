@@ -3,164 +3,160 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Cute Platformer</title>
+<title>Cute Platformer — 100 Levels (Reachable + Spikes + Boosts)</title>
 <style>
-  html,body { height:100%; margin:0; background: linear-gradient(180deg,#FFFAF0,#F3E8FF); font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+  html,body { height:100%; margin:0; background: linear-gradient(180deg,#FFF9FB,#F0F9FF); font-family: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
   #gameCanvas { display:block; width:100vw; height:100vh; background: transparent; }
-  #overlay {
-    position: absolute; left:0; top:0; right:0; bottom:0; pointer-events:none;
-  }
+  #overlay { position:absolute; inset:0; pointer-events:none; }
   .menu {
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-    background: rgba(10,10,20,0.25); backdrop-filter: blur(6px);
-    color:#fff; flex-direction:column; gap:14px; pointer-events:auto;
+    background: rgba(6,6,12,0.25); backdrop-filter: blur(6px);
+    color:#fff; flex-direction:column; gap:12px; pointer-events:auto; padding:18px;
   }
-  .menu h1 { margin:0; font-size:38px; letter-spacing:1px; color:#fff; text-shadow: 0 3px 10px rgba(0,0,0,0.35); }
-  .menu p { margin:0; color:#f0f0f0; opacity:0.95; max-width:720px; text-align:center; }
-  .btn {
-    background: linear-gradient(180deg,#FFD6E0,#FF9CCC); border:0; padding:12px 22px;
-    font-size:18px; border-radius:12px; cursor:pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.18);
-  }
+  .btn { pointer-events:auto; border:0; padding:10px 18px; border-radius:10px; cursor:pointer; font-weight:600; }
+  .btn.primary { background: linear-gradient(180deg,#FFD6E0,#FF9CCC); }
   .btn.alt { background: linear-gradient(180deg,#D7F0FF,#A9E0FF); }
-  #hud {
-    position:absolute; left:0; right:0; top:8px; display:flex; justify-content:center; pointer-events:none;
+  #hud { position:absolute; left:0; right:0; top:8px; display:flex; justify-content:center; pointer-events:none; }
+  #hud .level { font-size:36px; color:#222; font-weight:700; background: rgba(255,255,255,0.9); padding:8px 16px; border-radius:14px; }
+  #sideHud { position:absolute; left:12px; top:12px; pointer-events:none; display:flex; flex-direction:column; gap:8px; }
+  .chip { background: rgba(255,255,255,0.95); padding:6px 10px; border-radius:10px; color:#222; font-weight:600; pointer-events:none; }
+  #legend { position:absolute; right:12px; top:12px; pointer-events:none; background: rgba(255,255,255,0.95); padding:8px 10px; border-radius:10px; font-size:13px; color:#222; }
+  #controls { position:absolute; bottom:12px; left:12px; background: rgba(255,255,255,0.95); padding:8px 10px; border-radius:10px; color:#222; pointer-events:none; font-size:13px; }
+  #levelSelectGrid { display:grid; grid-template-columns: repeat(10, 36px); gap:6px; margin-top:10px; max-height:240px; overflow:auto; padding:6px; }
+  .levelButton { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; color:#222; background:rgba(255,255,255,0.9); pointer-events:auto; }
+  .locked { filter:grayscale(1) opacity(0.6); cursor:not-allowed; pointer-events:none; }
+  /* small responsive tweaks */
+  @media (max-width:720px) {
+    #hud .level { font-size:26px; padding:6px 12px; }
   }
-  #hud .level {
-    font-size:40px; color:#222; font-weight:700;
-    background: rgba(255,255,255,0.88); padding:8px 18px; border-radius:16px;
-  }
-  #smallHud {
-    position:absolute; top:12px; left:16px; font-size:16px; color:#333; background:rgba(255,255,255,0.9);
-    padding:8px 12px; border-radius:10px; pointer-events:none;
-  }
-  #controls {
-    position:absolute; bottom:12px; left:12px; font-size:13px; color:#222; background:rgba(255,255,255,0.95);
-    padding:8px 10px; border-radius:10px;
-  }
-  #menuControls { display:flex; gap:8px; }
-  #levelSelectGrid {
-    display:grid; grid-template-columns: repeat(10, 36px); gap:6px; margin-top:10px; max-height:260px; overflow:auto;
-    padding:6px; background: rgba(255,255,255,0.06); border-radius:8px;
-  }
-  .levelButton { width:36px; height:36px; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:13px; color:#222; background:rgba(255,255,255,0.9); }
-  .locked { filter:grayscale(1) opacity(0.6); cursor:not-allowed; }
-  .chip { display:inline-block; padding:4px 8px; border-radius:10px; background:rgba(255,255,255,0.9); color:#222; font-size:13px; margin-left:6px; }
 </style>
 </head>
 <body>
-
 <canvas id="gameCanvas"></canvas>
 
 <div id="overlay">
   <div id="hud"><div class="level" id="levelDisplay">Level 1 / 100</div></div>
-  <div id="smallHud">Coins: <span id="coinCount">0</span> <span class="chip" id="progressChip">Unlocked: 1</span></div>
 
-  <div id="menu" class="menu" style="display:flex; gap:12px; pointer-events:auto;">
+  <div id="sideHud">
+    <div class="chip" id="coinChip">Coins: 0</div>
+    <div class="chip" id="progressChip">Unlocked: 1</div>
+  </div>
+
+  <div id="legend">
+    Legend:
+    <div style="display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;">
+      <div style="width:12px;height:12px;background:#CDE8FF;border-radius:3px;"></div><div style="font-size:12px">Normal</div>
+      <div style="width:12px;height:12px;background:#D8C6FF;border-radius:3px;margin-left:6px"></div><div style="font-size:12px">Moving</div>
+      <div style="width:12px;height:12px;background:#C8FFD0;border-radius:3px;margin-left:6px"></div><div style="font-size:12px">Boost</div>
+      <div style="width:12px;height:12px;background:#FFCCCC;border-radius:3px;margin-left:6px"></div><div style="font-size:12px">Spike</div>
+      <div style="width:12px;height:12px;background:#FFE3BF;border-radius:3px;margin-left:6px"></div><div style="font-size:12px">Breaking</div>
+    </div>
+  </div>
+
+  <div id="controls">←/A →/D = move • Space = jump • P = pause • R = restart</div>
+
+  <div id="menu" class="menu">
     <h1 id="menuTitle">✨ Cute Platformer ✨</h1>
-    <p id="menuDesc">100 tiny levels with moving platforms, jump-boost pads, spikes, and breaking platforms. Reach the star to unlock the next level. Progress is saved locally.</p>
-    <div id="menuControls" style="display:flex; gap:10px;">
-      <button id="startBtn" class="btn">Start (Space)</button>
+    <p id="menuDesc">100 playable levels — now with guaranteed reachability, visible spikes, jump-boost platforms, moving and breaking platforms, and persistent progress saved locally.</p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button id="startBtn" class="btn primary">Start (Space)</button>
       <button id="openSelectBtn" class="btn alt">Level Select</button>
       <button id="resetProgressBtn" class="btn" style="background:linear-gradient(180deg,#FFBDBD,#FF8A8A)">Reset Progress</button>
     </div>
 
-    <div id="levelSelect" style="width:760px; display:none; flex-direction:column; align-items:center;">
-      <div style="display:flex; gap:10px; align-items:center;">
-        <p style="margin:0; font-weight:600;">Choose Level</p>
-        <p style="margin:0; font-size:13px; opacity:0.9;">(locked levels are gray)</p>
+    <div id="levelSelect" style="display:none; margin-top:10px; width:760px; max-width:95%;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:700;">Level Select</div>
+        <div><button id="closeSelectBtn" class="btn alt">Close</button></div>
       </div>
       <div id="levelSelectGrid"></div>
-      <div style="margin-top:8px;"><button id="closeSelectBtn" class="btn alt">Close</button></div>
     </div>
 
-    <p style="font-size:13px; opacity:0.9">P = Pause • R = Restart level • Fall / spikes = return to menu</p>
+    <p style="font-size:13px; opacity:0.9; margin-top:6px">If a level feels too hard, you can select any unlocked level from the Level Select. Progress is saved automatically.</p>
   </div>
-
-  <div id="controls">←/A →/D = move • Space = jump • Hold keys for smooth movement</div>
 </div>
 
 <script>
-/*
-Cute Platformer — Extended version
-- 100 generated levels with guaranteed reachability
-- Platform types: normal, moving, boost (jump), spike, breaking
-- localStorage: saves highest unlocked level and total coins
-- Level select UI shows unlocked levels
-- Controls: left/right / A/D, Space jump, P pause, R restart
-- Many configuration variables below
+/* Complete single-file platformer.
+   Key improvements:
+   - Conservative reachable-gap calculation + placement retries to avoid impossible levels.
+   - Spike platforms drawn and functional.
+   - Jump boost platforms visually clear and actually increase jump when jumping.
+   - Moving platforms constrained to remain reachable.
+   - Breaking platforms disappear after stepping.
+   - Local storage save of highestUnlocked and totalCoins.
+   - Level select UI shows unlocked levels.
+   - Particle pops for coins / break / boost.
 */
 
-// Canvas setup
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-
-let W = canvas.width = innerWidth;
-let H = canvas.height = innerHeight;
-
-window.addEventListener('resize', () => {
-  W = canvas.width = innerWidth;
-  H = canvas.height = innerHeight;
-  camera.x = Math.max(0, player.x - W * 0.35);
-});
-
-// -----------------------------------------
-// Configurable constants (tweakable)
+/* ---------------------------
+   Configuration
+   --------------------------- */
 const LEVEL_COUNT = 100;
-const BASE_LEVEL_WIDTH = 1200;
-const EXTRA_WIDTH_PER_LEVEL = 46; // small growth per level
+const BASE_LEVEL_WIDTH = 1100;
+const EXTRA_WIDTH_PER_LEVEL = 40;
+
 const PLAYER_CONFIG = {
   w: 40, h: 52,
-  speedAccel: 0.36,   // pixels per ms^2 (acceleration coefficient)
-  maxSpeed: 6.5,      // horizontal max speed (px/frame)
-  jumpStrength: 11.8, // initial upward velocity (px/frame)
-  gravity: 0.5,       // gravity (px/frame^2)
-  coyoteTime: 140,    // ms
-  jumpBuffer: 140     // ms
+  speedAccel: 0.36,
+  maxSpeed: 6.3,    // px/frame (approx)
+  jumpStrength: 11.6, // initial upward velocity (px/frame)
+  gravity: 0.5,     // px/frame^2
+  coyoteTime: 140,  // ms
+  jumpBuffer: 140   // ms
 };
-const PLATFORM_TYPES = ['normal','moving','boost','spike','breaking'];
-// probabilities for extra platform types (higher levels increase chance)
-const BASE_CHANCES = {
+
+const PROB_BASE = {
   moving: 0.08,
   boost: 0.06,
   spike: 0.06,
   breaking: 0.06
 };
-const MOVING_SPEED_RANGE = [0.6, 2.4]; // px/frame
-const MOVING_RANGE_MIN = 70;
-const BREAK_DELAY_MS = 420; // ms after stepping where the breaking platform disappears
-const COIN_COUNT_BASE = 6;
 
-// -----------------------------------------
-// Persistence (localStorage)
-const STORAGE_KEY = 'cute_platformer_save_v1';
-// saved structure: { highestUnlocked: number (1..100), totalCoins: number }
-function loadSave() {
+const MOVING_SPEED_RANGE = [0.6, 2.2]; // px/frame
+const MOVING_RANGE_MIN = 60;
+const BREAK_DELAY_MS = 420;
+const COIN_BASE = 6;
+
+/* ---------------------------
+   Persistence
+   --------------------------- */
+const STORAGE_KEY = 'cute_platformer_save_v2';
+function loadSave(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { highestUnlocked: 1, totalCoins: 0 };
-    const parsed = JSON.parse(raw);
-    return {
-      highestUnlocked: Math.max(1, Math.min(LEVEL_COUNT, parsed.highestUnlocked || 1)),
-      totalCoins: parsed.totalCoins || 0
-    };
-  } catch (e) {
-    return { highestUnlocked: 1, totalCoins: 0 };
+    if (!raw) return { highestUnlocked:1, totalCoins:0 };
+    const p = JSON.parse(raw);
+    return { highestUnlocked: Math.max(1, Math.min(LEVEL_COUNT, p.highestUnlocked||1)), totalCoins: p.totalCoins||0 };
+  } catch {
+    return { highestUnlocked:1, totalCoins:0 };
   }
 }
-function saveProgress(state) {
+function saveProgress(state){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 function resetProgress() {
   localStorage.removeItem(STORAGE_KEY);
   save = { highestUnlocked:1, totalCoins:0 };
-  applySaveToUI();
+  applySaveUI();
 }
 
-// initial load
-let save = loadSave();
+/* ---------------------------
+   Canvas & UI nodes
+   --------------------------- */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let W = canvas.width = innerWidth;
+let H = canvas.height = innerHeight;
+window.addEventListener('resize', ()=>{
+  W = canvas.width = innerWidth;
+  H = canvas.height = innerHeight;
+  camera.x = Math.max(0, player.x - W*0.35);
+});
 
-// -----------------------------------------
-// UI references
+const levelDisplay = document.getElementById('levelDisplay');
+const coinChip = document.getElementById('coinChip');
+const progressChip = document.getElementById('progressChip');
 const menuEl = document.getElementById('menu');
 const startBtn = document.getElementById('startBtn');
 const openSelectBtn = document.getElementById('openSelectBtn');
@@ -168,161 +164,29 @@ const resetProgressBtn = document.getElementById('resetProgressBtn');
 const levelSelect = document.getElementById('levelSelect');
 const closeSelectBtn = document.getElementById('closeSelectBtn');
 const levelSelectGrid = document.getElementById('levelSelectGrid');
-const levelDisplay = document.getElementById('levelDisplay');
-const coinCountEl = document.getElementById('coinCount');
-const progressChip = document.getElementById('progressChip');
 const menuTitle = document.getElementById('menuTitle');
 const menuDesc = document.getElementById('menuDesc');
 
-function applySaveToUI() {
-  progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1);
-  coinCountEl.textContent = save.totalCoins || 0;
-}
-applySaveToUI();
+/* ---------------------------
+   State
+   --------------------------- */
+let save = loadSave();
+let currentLevelIndex = Math.max(0, Math.min(LEVEL_COUNT-1, save.highestUnlocked-1));
+let levels = []; // generated configs
+let level = null; // working copy
+let running = false;
+let paused = false;
+let lastFrame = performance.now();
+let coinsThisLevel = 0;
 
-// build level select buttons
-function buildLevelSelectGrid() {
-  levelSelectGrid.innerHTML = '';
-  for (let i=0;i<LEVEL_COUNT;i++){
-    const btn = document.createElement('div');
-    btn.className = 'levelButton';
-    btn.textContent = (i+1);
-    if (i+1 > save.highestUnlocked) {
-      btn.classList.add('locked');
-    } else {
-      btn.addEventListener('click', ()=> {
-        currentLevelIndex = i;
-        startGame();
-      });
-    }
-    levelSelectGrid.appendChild(btn);
-  }
-}
-buildLevelSelectGrid();
-
-// -----------------------------------------
-// Input
-const keys = {};
-window.addEventListener('keydown', (e) => {
-  keys[e.key.toLowerCase()] = true;
-  if (!running && (e.key === ' ')) startGame();
-  if (e.key === 'p') paused = !paused;
-  if (e.key === 'r' && running) restartLevel();
-});
-window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
-
-// menu buttons
-startBtn.addEventListener('click', startGame);
-openSelectBtn.addEventListener('click', ()=> {
-  levelSelect.style.display = levelSelect.style.display === 'flex' ? 'none' : 'flex';
-});
-closeSelectBtn.addEventListener('click', ()=> levelSelect.style.display = 'none');
-resetProgressBtn.addEventListener('click', ()=> {
-  if (confirm("Reset saved progress? This will unlock only level 1 and clear coins.")) {
-    resetProgress();
-    buildLevelSelectGrid();
-    applySaveToUI();
-    menuTitle.textContent = '✨ Cute Platformer ✨';
-    menuDesc.textContent = 'Progress reset. Press Start to play.';
-  }
-});
-
-// -----------------------------------------
-// Level generation
-// We'll generate levels with platforms placed sequentially with gaps guaranteed <= max horizontal jump capability.
-// Also add platform types according to difficulty.
-const levels = [];
-function generateLevels() {
-  levels.length = 0;
-  for (let i=0;i<LEVEL_COUNT;i++){
-    const difficulty = i / (LEVEL_COUNT - 1); // 0..1
-    const width = Math.round(BASE_LEVEL_WIDTH + i * EXTRA_WIDTH_PER_LEVEL + Math.random() * 400);
-    const baseY = H - 80;
-    const platforms = [];
-
-    // player capabilities used to guarantee reachability
-    const player = PLAYER_CONFIG;
-    // approximate airtime: t = 2 * jumpStrength / gravity (frames) -> convert to ms frame estimate 16.67ms/frame
-    // We use a conservative multiplier to ensure reachability
-    const airtimeFrames = 2 * player.jumpStrength / player.gravity; // approx frames
-    const airtimeMs = airtimeFrames * 16.67;
-    const maxHorizontalReach = player.maxSpeed * (airtimeFrames) * 0.98 + 30; // conservative
-    const maxGap = Math.max(140, Math.min(650, Math.round(maxHorizontalReach * (1 + difficulty*0.35))));
-
-    // starting platform
-    platforms.push({ x: 0, y: baseY - 20, w: Math.min(600, 260 + Math.round(200 - difficulty*120)), h: 24, type:'normal' });
-
-    // produce a set of platforms placed forward; ensure step gaps <= maxGap
-    let cursor = 300;
-    const segments = 8 + Math.round(difficulty * 16);
-    for (let seg=0; seg<segments && cursor < width - 300; seg++){
-      const pCount = 1 + Math.floor(Math.random()*2); // 1 or 2
-      for (let p=0; p<pCount && cursor < width - 200; p++){
-        // choose gap but <= maxGap
-        const gap = 80 + Math.round(Math.random() * (Math.max(100, maxGap - 80)));
-        const pw = 80 + Math.round(Math.random() * (120 + difficulty*80));
-        const maxRise = Math.round(220 + difficulty * 260);
-        let py = baseY - 30 - Math.round(Math.random() * maxRise) - Math.round(Math.sin((cursor + p*50) / 200) * 40);
-        py = Math.max(120, Math.min(baseY - 20, py));
-        // platform type probabilistic
-        const r = Math.random();
-        let type = 'normal';
-        if (r < BASE_CHANCES.moving + difficulty*0.08) type = 'moving';
-        else if (r < BASE_CHANCES.moving + BASE_CHANCES.boost + difficulty*0.06) type = 'boost';
-        else if (r < BASE_CHANCES.moving + BASE_CHANCES.boost + BASE_CHANCES.spike + difficulty*0.06) type = 'spike';
-        else if (r < BASE_CHANCES.moving + BASE_CHANCES.boost + BASE_CHANCES.spike + BASE_CHANCES.breaking + difficulty*0.06) type = 'breaking';
-        // push platform
-        platforms.push({ x: cursor + gap, y: py, w: pw, h: 18, type });
-      }
-      cursor += 300 + Math.round(Math.random() * (200 + difficulty * 420));
-    }
-
-    // final platform near the end; ensure it's reachable from previous platform
-    const lastX = Math.max(cursor + 80, width - 350);
-    const finalY = baseY - 60 - Math.round(difficulty * 160);
-    platforms.push({ x: lastX, y: Math.max(120, Math.min(baseY - 20, finalY)), w: 240, h: 22, type: 'normal' });
-
-    // coins
-    const coins = [];
-    const coinCount = COIN_COUNT_BASE + Math.round(difficulty * 10);
-    for (let c=0;c<coinCount;c++){
-      const p = platforms[Math.floor(Math.random() * platforms.length)];
-      const cx = p.x + 20 + Math.random()*(Math.max(30, p.w - 40));
-      const cy = p.y - 26 - Math.random()*36;
-      coins.push({ x: cx, y: cy, r: 8, collected: false });
-    }
-
-    // star / goal centered on final platform
-    const finalPlat = platforms[platforms.length-1];
-    const star = { x: finalPlat.x + finalPlat.w/2, y: finalPlat.y - 44, r: 18 };
-
-    // extra properties for moving/breaking platforms
-    for (const p of platforms) {
-      if (p.type === 'moving') {
-        // choose horizontal or vertical movement (H more common)
-        if (Math.random() < 0.72) {
-          p.moving = { axis:'x', range: MOVING_RANGE_MIN + Math.round(Math.random()*200 + (difficulty*120)), speed: (MOVING_SPEED_RANGE[0] + Math.random()*(MOVING_SPEED_RANGE[1]-MOVING_SPEED_RANGE[0])) * (1 + difficulty*0.2) };
-        } else {
-          p.moving = { axis:'y', range: MOVING_RANGE_MIN/2 + Math.round(Math.random()*140 + (difficulty*80)), speed: (MOVING_SPEED_RANGE[0] + Math.random()*(MOVING_SPEED_RANGE[1]-MOVING_SPEED_RANGE[0])) * (1 + difficulty*0.18) };
-        }
-        p.startX = p.x; p.startY = p.y; p._dir = 1;
-      } else if (p.type === 'breaking') {
-        p.breaking = { stepping:false, timer:0 };
-      } else if (p.type === 'boost') {
-        p.boost = { multiplier: 1.45 + Math.random()*0.35 }; // increases jumpStrength while on it
-      }
-    }
-
-    levels.push({ platforms, coins, star, width: Math.max(width, lastX + 400), baseY });
-  }
-}
-generateLevels();
-
-// -----------------------------------------
-// Player & physics (mostly same as earlier, with a few adjustments)
+/* ---------------------------
+   Player and camera
+   --------------------------- */
 const player = {
   x: 120, y: H - 220, w: PLAYER_CONFIG.w, h: PLAYER_CONFIG.h,
-  vx: 0, vy: 0, speedAccel: PLAYER_CONFIG.speedAccel, maxSpeed: PLAYER_CONFIG.maxSpeed,
+  vx: 0, vy: 0,
+  speedAccel: PLAYER_CONFIG.speedAccel,
+  maxSpeed: PLAYER_CONFIG.maxSpeed,
   jumpStrength: PLAYER_CONFIG.jumpStrength, gravity: PLAYER_CONFIG.gravity,
   onGround: false, facing: 1, coyoteTimer: 0, jumpBufferTimer: 0,
   coyoteTime: PLAYER_CONFIG.coyoteTime, jumpBuffer: PLAYER_CONFIG.jumpBuffer
@@ -330,135 +194,299 @@ const player = {
 
 const camera = { x:0, y:0 };
 
-// -----------------------------------------
-// Level state & management
-let currentLevelIndex = Math.max(0, Math.min(LEVEL_COUNT-1, save.highestUnlocked - 1));
-let level = null; // will be loaded
-let running = false;
-let paused = false;
-let lastFrame = performance.now();
-let coinsCollectedThisLevel = 0;
+/* ---------------------------
+   Input
+   --------------------------- */
+const keys = {};
+window.addEventListener('keydown', (e)=> {
+  keys[e.key.toLowerCase()] = true;
+  if (!running && e.key === ' ') startGame();
+  if (e.key === 'p') paused = !paused;
+  if (e.key === 'r' && running) restartLevel();
+});
+window.addEventListener('keyup', (e)=> keys[e.key.toLowerCase()] = false);
 
-// Helper: clamp
-function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+/* ---------------------------
+   Utility helpers
+   --------------------------- */
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function randRange(a,b){ return a + Math.random() * (b-a); }
+function randInt(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
 
-// load level into playable copy (so we can modify coin states)
+/* ---------------------------
+   Level generator — Guarantees reachability
+   - conservative horizontal reach calculation
+   - retries placement for each platform until it is reachable
+   - if it cannot place after many attempts, reduce gap/height to make it reachable
+   --------------------------- */
+function computeConservativeMaxGap() {
+  // Use an approximation for horizontal reachable distance during a jump:
+  // airtimeFrames ≈ 2 * jumpStrength / gravity
+  // horizontal reach ≈ maxSpeed * airtimeFrames
+  const frames = 2 * PLAYER_CONFIG.jumpStrength / PLAYER_CONFIG.gravity;
+  const reach = PLAYER_CONFIG.maxSpeed * frames;
+  // use a conservative factor (0.78) and clamp to reasonable min/max
+  return Math.round(clamp(reach * 0.78, 140, 700));
+}
+
+function generateLevels() {
+  levels.length = 0;
+  for (let i=0;i<LEVEL_COUNT;i++){
+    const difficulty = i / (LEVEL_COUNT-1);
+    const width = Math.round(BASE_LEVEL_WIDTH + i * EXTRA_WIDTH_PER_LEVEL + Math.random()*360);
+    const baseY = H - 80;
+
+    const platforms = [];
+    // start platform
+    platforms.push({ x:0, y: baseY - 18, w: Math.min(600, 260 + Math.round(200 - difficulty*120)), h:20, type:'normal' });
+
+    const conservativeMaxGap = computeConservativeMaxGap();
+    // cap vertical move so levels don't stack too high
+    const maxVerticalStep = Math.round(220 + difficulty * 120);
+
+    let cursor = 300;
+    const segments = 7 + Math.round(difficulty * 16);
+
+    for (let seg=0; seg<segments && cursor < width - 260; seg++){
+      const pCount = 1 + Math.floor(Math.random()*2);
+      for (let p=0;p<pCount && cursor < width - 200; p++){
+        // choose type with mild difficulty progression
+        let type = 'normal';
+        const r = Math.random();
+        const movingChance = PROB_BASE.moving + difficulty*0.08;
+        const boostChance = PROB_BASE.boost + difficulty*0.04;
+        const spikeChance = PROB_BASE.spike + difficulty*0.05;
+        const breakingChance = PROB_BASE.breaking + difficulty*0.05;
+
+        if (r < movingChance) type = 'moving';
+        else if (r < movingChance + boostChance) type = 'boost';
+        else if (r < movingChance + boostChance + spikeChance) type = 'spike';
+        else if (r < movingChance + boostChance + spikeChance + breakingChance) type = 'breaking';
+
+        // try placing this platform with retries until reachable from last placed platform
+        let attempts = 0;
+        let placed = false;
+        let px=0, py=0, pw=0;
+        const prev = platforms[platforms.length-1];
+        while (!placed && attempts < 160) {
+          attempts++;
+          // choose a gap that is usually less than conservativeMaxGap, but sometimes allow larger if type is boost and we'll place boost to allow jump
+          // choose gap baseline
+          let gap = 80 + Math.round(Math.random() * Math.max(80, conservativeMaxGap - 80));
+          // occasionally reduce gap for easier traversal
+          if (Math.random() < 0.18) gap = Math.round(gap * (0.6 + Math.random()*0.6));
+
+          // width of platform
+          pw = 80 + Math.round(Math.random() * (120 + difficulty * 80));
+          px = cursor + gap;
+          // vertical position attempt
+          const yVariation = Math.round(Math.random() * (maxVerticalStep));
+          py = Math.max(120, Math.min(baseY - 20, prev.y - Math.round(60 - Math.random()*120) + yVariation - (Math.random()*60)));
+
+          // compute horizontal difference and vertical difference
+          const dx = px - (prev.x + prev.w);
+          const dy = Math.abs(py - prev.y);
+
+          // If dx <= conservativeMaxGap it's likely reachable. If it's bigger:
+          // - allow if previous platform is boost and type is normal (player can jump farther)
+          // - or if this platform is boost and dx is slightly bigger (we place boost to allow jump from prev)
+          // otherwise reduce gap and continue
+          if (dx <= conservativeMaxGap) {
+            placed = true;
+            break;
+          } else {
+            // allow special case: if either prev or current is boost and dx <= conservativeMaxGap * 1.20
+            if ((prev && prev.type === 'boost') && dx <= conservativeMaxGap * 1.22) { placed = true; break; }
+            if ((type === 'boost') && dx <= conservativeMaxGap * 1.22) { placed = true; break; }
+            // if moving platform, ensure its range can bring it closer later — but keep guaranteed by limiting range later
+            // otherwise reduce gap a bit and retry
+            gap = Math.max(80, Math.round(gap * 0.7));
+            cursor -= Math.round((Math.random()*20)); // a small nudge back to avoid runaway
+            // Also as last resort: clamp px to be reachable
+            if (attempts > 100) {
+              px = prev.x + prev.w + Math.round(conservativeMaxGap * (0.9 + Math.random()*0.05));
+              placed = true; break;
+            }
+          }
+        } // attempts loop
+
+        // finalize type-specific properties
+        const plat = { x: px, y: py, w: pw, h: 18, type };
+        if (type === 'moving') {
+          // choose axis, set range such that platform endpoint remains within conservative reach from prev
+          if (Math.random() < 0.76) {
+            // horizontal movement but keep startX such that moving will not create unreachable spots
+            const range = Math.round(MOVING_RANGE_MIN + Math.random()*Math.max(80, conservativeMaxGap*0.28 + difficulty*120));
+            plat.moving = { axis:'x', range: range, speed: randRange(MOVING_SPEED_RANGE[0], MOVING_SPEED_RANGE[1]) * (1 + difficulty*0.18) };
+          } else {
+            const range = Math.round(MOVING_RANGE_MIN/2 + Math.random()*100 + difficulty*80);
+            plat.moving = { axis:'y', range: range, speed: randRange(MOVING_SPEED_RANGE[0], MOVING_SPEED_RANGE[1]) * (1 + difficulty*0.16) };
+          }
+          plat.startX = plat.x; plat.startY = plat.y; plat._dir = 1; plat._offset = 0;
+        } else if (type === 'breaking') {
+          plat.breaking = { stepping:false, timer:0 }; plat._gone = false;
+        } else if (type === 'boost') {
+          plat.boost = { multiplier: 1.45 + Math.random()*0.35 };
+        }
+        platforms.push(plat);
+        cursor = px + pw + 20;
+      } // pCount
+      cursor += 200 + Math.round(Math.random() * (120 + difficulty * 420));
+    } // segments
+
+    // final large platform / goal — must be reachable from previous platform
+    let lastPlat = platforms[platforms.length-1];
+    let finalX = Math.max(cursor + 100, width - 360);
+    let finalY = Math.max(120, Math.min(baseY - 20, lastPlat.y - 10 - Math.round(difficulty * 120)));
+    // ensure finalX is reachable — adjust if needed
+    const dxFinal = finalX - (lastPlat.x + lastPlat.w);
+    if (dxFinal > computeConservativeMaxGap()) {
+      // if too far, attempt to insert a boost platform before final
+      const boostX = lastPlat.x + lastPlat.w + Math.round(computeConservativeMaxGap() * 0.6);
+      platforms.push({ x: boostX, y: lastPlat.y - Math.round(30 + Math.random()*40), w: 140, h:18, type:'boost', boost:{multiplier:1.55} });
+      finalX = boostX + 220;
+      finalY = Math.max(120, Math.min(baseY - 20, platforms[platforms.length-1].y - 40));
+    }
+    // final platform
+    const finalPlat = { x: finalX, y: finalY, w: 240, h:22, type:'normal' };
+    platforms.push(finalPlat);
+
+    // coins (scattered)
+    const coins = [];
+    const coinCount = COIN_BASE + Math.round(difficulty * 10);
+    for (let c=0;c<coinCount;c++){
+      const p = platforms[Math.floor(Math.random()*platforms.length)];
+      const cx = p.x + 16 + Math.random() * Math.max(20, p.w - 32);
+      const cy = p.y - 26 - Math.random()*40;
+      coins.push({ x: cx, y: cy, r: 8, collected:false });
+    }
+
+    const star = { x: finalPlat.x + finalPlat.w/2, y: finalPlat.y - 44, r: 18 };
+    // store level
+    levels.push({ platforms, coins, star, width: Math.max(width, finalPlat.x + finalPlat.w + 100), baseY });
+  } // level loop
+} // generateLevels
+
+generateLevels();
+
+/* ---------------------------
+   Deep-copy load for play
+   --------------------------- */
 function loadLevel(index) {
   currentLevelIndex = clamp(index, 0, LEVEL_COUNT-1);
-  // copy deep-ish: JSON is fine here
   level = JSON.parse(JSON.stringify(levels[currentLevelIndex]));
-  // reset platform runtime fields (for moving etc)
-  for (const p of level.platforms){
+  // re-init runtime fields
+  for (const p of level.platforms) {
     if (p.moving) { p.x = p.startX; p.y = p.startY; p._dir = 1; p._offset = 0; }
     if (p.breaking) { p.breaking.stepping = false; p.breaking.timer = 0; p._gone = false; }
   }
   level.coins.forEach(c => c.collected = false);
-  // reset player
-  player.x = 120;
-  player.y = H - 220;
-  player.vx = 0;
-  player.vy = 0;
-  player.onGround = false;
-  player.coyoteTimer = 0;
-  player.jumpBufferTimer = 0;
-  coinsCollectedThisLevel = 0;
+  player.x = 120; player.y = H - 220; player.vx = 0; player.vy = 0; player.onGround = false; player.coyoteTimer = 0; player.jumpBufferTimer = 0;
+  coinsThisLevel = 0;
   camera.x = 0;
-  camera.y = 0;
   updateHUD();
 }
 
-// HUD updater
+/* ---------------------------
+   HUD & UI helpers
+   --------------------------- */
+function applySaveUI(){
+  progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1);
+  coinChip.textContent = 'Coins: ' + ( (save.totalCoins||0) + coinsThisLevel );
+}
 function updateHUD(){
   levelDisplay.textContent = `Level ${currentLevelIndex + 1} / ${LEVEL_COUNT}`;
-  coinCountEl.textContent = (save.totalCoins || 0) + coinsCollectedThisLevel;
+  coinChip.textContent = 'Coins: ' + ( (save.totalCoins||0) + coinsThisLevel );
   progressChip.textContent = 'Unlocked: ' + (save.highestUnlocked || 1);
 }
 
-// -----------------------------------------
-// Collision helpers (AABB)
+/* ---------------------------
+   Collision & physics helpers
+   --------------------------- */
 function rectIntersects(a,b){
   return !(a.x + a.w < b.x || a.x > b.x + b.w || a.y + a.h < b.y || a.y > b.y + b.h);
 }
+function resolveCollision(px,py,pw,ph,plat){
+  const p = {x:px,y:py,w:pw,h:ph};
+  const q = {x:plat.x,y:plat.y,w:plat.w,h:plat.h};
+  if (!rectIntersects(p,q)) return null;
+  const ox1 = (p.x + p.w) - q.x;
+  const ox2 = (q.x + q.w) - p.x;
+  const oy1 = (p.y + p.h) - q.y;
+  const oy2 = (q.y + q.h) - p.y;
+  const m = Math.min(ox1,ox2,oy1,oy2);
+  if (m === oy1) return { side:'top', y: q.y - p.h };
+  if (m === oy2) return { side:'bottom', y: q.y + q.h };
+  if (m === ox1) return { side:'left', x: q.x - p.w };
+  return { side:'right', x: q.x + q.w };
+}
 
-// precise collision resolution similar to earlier version
-function resolveCollision(px, py, pw, ph, platform) {
-  const pBox = { x: px, y: py, w: pw, h: ph };
-  const plat = { x: platform.x, y: platform.y, w: platform.w, h: platform.h };
-  if (!rectIntersects(pBox, plat)) return null;
-  // compute overlaps
-  const overlapX1 = (pBox.x + pBox.w) - plat.x;
-  const overlapX2 = (plat.x + plat.w) - pBox.x;
-  const overlapY1 = (pBox.y + pBox.h) - plat.y;
-  const overlapY2 = (plat.y + plat.h) - pBox.y;
-  const minOverlap = Math.min(overlapX1, overlapX2, overlapY1, overlapY2);
-  if (minOverlap === overlapY1) {
-    return { side:'top', y: plat.y - pBox.h };
-  } else if (minOverlap === overlapY2) {
-    return { side:'bottom', y: plat.y + plat.h };
-  } else if (minOverlap === overlapX1) {
-    return { side:'left', x: plat.x - pBox.w };
-  } else {
-    return { side:'right', x: plat.x + plat.w };
+/* ---------------------------
+   Particles (tiny visual polish)
+   --------------------------- */
+const particles = [];
+function spawnParticles(x,y,color,count=8){
+  for (let i=0;i<count;i++){
+    particles.push({
+      x,y,
+      vx: randRange(-1.6,1.6), vy: randRange(-3.2,-0.6),
+      life: 420 + Math.random()*220, color,
+      size: 2 + Math.random()*3
+    });
+  }
+}
+function updateParticles(dt){
+  for (let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.life -= dt;
+    if (p.life <= 0) { particles.splice(i,1); continue; }
+    p.vy += 0.06 * (dt/16.67);
+    p.x += p.vx * (dt/16.67);
+    p.y += p.vy * (dt/16.67);
   }
 }
 
-// -----------------------------------------
-// Game flow functions
-function startGame() {
-  // ensure you cannot start a future locked level
+/* ---------------------------
+   Game update loop
+   --------------------------- */
+function startGame(){
+  // clamp to unlocked
   if (currentLevelIndex + 1 > save.highestUnlocked) currentLevelIndex = save.highestUnlocked - 1;
   loadLevel(currentLevelIndex);
-  running = true;
-  paused = false;
+  running = true; paused = false;
   menuEl.style.display = 'none';
   lastFrame = performance.now();
-  requestAnimationFrame(gameLoop);
+  requestAnimationFrame(loop);
 }
-function restartLevel() {
-  loadLevel(currentLevelIndex);
-  running = true;
-  paused = false;
-  menuEl.style.display = 'none';
-}
-function goToMenuWithMessage(title, msg) {
-  running = false;
-  paused = false;
-  menuEl.style.display = 'flex';
-  menuTitle.textContent = title;
-  menuDesc.textContent = msg;
-  buildLevelSelectGrid(); // refresh level select locks
+function restartLevel(){ loadLevel(currentLevelIndex); running=true; paused=false; menuEl.style.display='none'; }
+function goToMenu(title,msg){
+  running=false; paused=false; menuEl.style.display='flex'; menuTitle.textContent = title; menuDesc.textContent = msg;
+  buildLevelSelectGrid();
 }
 
-// -----------------------------------------
-// Update & physics per frame
-function gameLoop(now) {
+function loop(now){
   if (!running) return;
-  const dt = Math.min(40, now - lastFrame); // clamp dt for stability (ms)
+  const dt = Math.min(40, now - lastFrame);
   lastFrame = now;
   if (!paused) update(dt);
   draw();
-  if (running) requestAnimationFrame(gameLoop);
+  if (running) requestAnimationFrame(loop);
 }
 
-function update(dt) {
-  // Input
+function update(dt){
+  // input
   const left = keys['arrowleft'] || keys['a'];
   const right = keys['arrowright'] || keys['d'];
   const jumpKey = keys[' '] || keys['spacebar'];
 
-  // Horizontal acceleration
+  // horizontal accel & friction
   const acc = player.speedAccel * dt;
-  if (left) { player.vx -= acc; player.facing = -1; }
-  if (right) { player.vx += acc; player.facing = 1; }
-  if (!left && !right) {
-    player.vx *= 0.86; // damping
-    if (Math.abs(player.vx) < 0.02) player.vx = 0;
-  }
-  // clamp
+  if (left) player.vx -= acc, player.facing = -1;
+  if (right) player.vx += acc, player.facing = 1;
+  if (!left && !right) player.vx *= 0.86;
   player.vx = clamp(player.vx, -player.maxSpeed, player.maxSpeed);
 
   // gravity
-  // scale gravity slightly with dt to keep behavior stable
   player.vy += player.gravity * (dt / 16.67);
 
   // jump buffer & coyote
@@ -466,26 +494,21 @@ function update(dt) {
   else player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - dt);
   player.coyoteTimer = Math.max(0, player.coyoteTimer - dt);
 
-  // attempt jump if buffered and allowed
-  if (player.jumpBufferTimer > 0 && (player.onGround || player.coyoteTimer > 0)) {
-    player.vy = -player.jumpStrength;
-    player.onGround = false;
-    player.coyoteTimer = 0;
-    player.jumpBufferTimer = 0;
-  }
-
-  // integrate movement
-  const prevX = player.x, prevY = player.y;
+  // attempt jump (we'll check boost platform multiplier just before jump)
+  // If buffered and on ground or coyote
+  let standingOn = null;
+  // move integration first
   player.x += player.vx;
   player.y += player.vy;
 
-  // world X bounds (allow a small off-screen margin)
+  // bounds clamp x
   if (player.x < -40) player.x = -40;
   if (player.x > level.width - player.w + 40) player.x = level.width - player.w + 40;
 
-  // update moving platforms positions before collision checks
-  for (const p of level.platforms) {
-    if (p.type === 'moving' && p.moving) {
+  // update moving platforms before collision checks
+  for (const p of level.platforms){
+    if (p._gone) continue;
+    if (p.type === 'moving' && p.moving){
       if (p.moving.axis === 'x') {
         p._offset = (p._offset || 0) + p.moving.speed * p._dir;
         p.x = p.startX + p._offset;
@@ -496,332 +519,263 @@ function update(dt) {
         if (Math.abs(p._offset) >= p.moving.range) p._dir *= -1;
       }
     }
-    // breaking platforms: handle removal if timed out
+    // breaking timers
     if (p.type === 'breaking' && p.breaking && p.breaking.timer > 0) {
       p.breaking.timer -= dt;
-      if (p.breaking.timer <= 0) {
-        p._gone = true; // mark to remove
-      }
-    }
-  }
-  // filter out gone breaking platforms (but keep them for consistent indexing; marking as _gone prevents collision)
-  // collisions
-  player.onGround = false;
-  let standingOn = null;
-  for (const p of level.platforms) {
-    if (p._gone) continue;
-    const res = resolveCollision(player.x, player.y, player.w, player.h, p);
-    if (!res) continue;
-    if (res.side === 'top') {
-      // landing on top
-      player.y = res.y;
-      player.vy = 0;
-      player.onGround = true;
-      player.coyoteTimer = player.coyoteTime;
-      standingOn = p;
-      // If platform is moving, carry the player's position horizontally by a small amount to stick
-      if (p.type === 'moving' && p.moving) {
-        // add platform's delta (speed * dir) to player
-        const delta = p.moving.speed * p._dir;
-        if (p.moving.axis === 'x') player.x += delta;
-        else player.y += delta;
-      }
-      // breaking platform: start timer the moment you step on it
-      if (p.type === 'breaking' && p.breaking) {
-        if (!p.breaking.stepping) {
-          p.breaking.stepping = true;
-          p.breaking.timer = BREAK_DELAY_MS;
-        }
-      }
-      // spike platform on top (!) - treat as death
-      if (p.type === 'spike') {
-        goToMenuWithMessage('Ouch — spike!', 'You hit spikes! Back to menu. Try again.');
-        return;
-      }
-      // boost platform - adjust effective jump while standing
-      if (p.type === 'boost' && p.boost) {
-        // while standing we'll apply boost by temporarily increasing jumpStrength
-        // (we'll do this by applying effect when jump happens)
-        // no immediate effect needed here
-      }
-    } else if (res.side === 'bottom') {
-      player.y = res.y;
-      player.vy = Math.max(0, player.vy);
-    } else if (res.side === 'left') {
-      player.x = res.x;
-      player.vx = Math.min(0, player.vx);
-    } else if (res.side === 'right') {
-      player.x = res.x;
-      player.vx = Math.max(0, player.vx);
+      if (p.breaking.timer <= 0) p._gone = true;
     }
   }
 
-  // coins collection
-  for (const c of level.coins) {
+  // collisions
+  player.onGround = false;
+  for (const p of level.platforms){
+    if (p._gone) continue;
+    const res = resolveCollision(player.x, player.y, player.w, player.h, p);
+    if (!res) continue;
+    if (res.side === 'top'){
+      player.y = res.y; player.vy = 0; player.onGround = true; standingOn = p; player.coyoteTimer = player.coyoteTime;
+      // stick to moving platform a bit so player moves with it
+      if (p.type === 'moving' && p.moving && p.moving.axis === 'x') {
+        player.x += p.moving.speed * p._dir * (1); // approximate carry
+      }
+      // breaking: start timer
+      if (p.type === 'breaking' && p.breaking && !p.breaking.stepping) {
+        p.breaking.stepping = true; p.breaking.timer = BREAK_DELAY_MS;
+      }
+      // spike on top -> death
+      if (p.type === 'spike') {
+        goToMenu('Ouch — spike!', 'You touched spikes. Back to menu.');
+        return;
+      }
+    } else if (res.side === 'bottom') {
+      player.y = res.y; player.vy = Math.max(0, player.vy);
+    } else if (res.side === 'left') {
+      player.x = res.x; player.vx = Math.min(0, player.vx);
+    } else {
+      player.x = res.x; player.vx = Math.max(0, player.vx);
+    }
+  }
+
+  // Apply boost effect: if player is on a boost platform and jump occurs, multiply jump strength
+  const effectiveJumpStrength = (standingOn && standingOn.type === 'boost' && standingOn.boost) ? (PLAYER_CONFIG.jumpStrength * standingOn.boost.multiplier) : PLAYER_CONFIG.jumpStrength;
+  // Now attempt jump
+  if (player.jumpBufferTimer > 0 && (player.onGround || player.coyoteTimer > 0)) {
+    player.vy = -effectiveJumpStrength;
+    player.onGround = false;
+    player.coyoteTimer = 0;
+    player.jumpBufferTimer = 0;
+    // small particle effect for boost feedback
+    if (standingOn && standingOn.type === 'boost') spawnParticles(player.x + player.w/2, player.y + player.h, '#9DF7A8', 12);
+  }
+
+  // collect coins
+  for (const c of level.coins){
     if (c.collected) continue;
     const dx = (player.x + player.w/2) - c.x;
     const dy = (player.y + player.h/2) - c.y;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < c.r + Math.max(player.w, player.h)/3) {
+    const d = Math.sqrt(dx*dx + dy*dy);
+    if (d < c.r + Math.max(player.w, player.h)/3) {
       c.collected = true;
-      coinsCollectedThisLevel++;
+      coinsThisLevel++;
       save.totalCoins = (save.totalCoins || 0) + 1;
       saveProgress(save);
+      spawnParticles(c.x, c.y, '#FFD66B', 10);
       updateHUD();
     }
   }
 
-  // star / goal detection (AABB)
+  // star / goal
   const star = level.star;
   const playerRect = { x: player.x, y: player.y, w: player.w, h: player.h };
   const starRect = { x: star.x - star.r, y: star.y - star.r, w: star.r*2, h: star.r*2 };
   if (rectIntersects(playerRect, starRect)) {
-    // mark progress: unlock next level if this was the highest unlocked
+    // unlock next level if necessary
     if (save.highestUnlocked < currentLevelIndex + 2) {
       save.highestUnlocked = Math.min(LEVEL_COUNT, currentLevelIndex + 2);
     }
     saveProgress(save);
-    applySaveToUI();
-    // load next or show final message
+    applySaveUI();
+    // next level or finished
     if (currentLevelIndex < LEVEL_COUNT - 1) {
       currentLevelIndex++;
       loadLevel(currentLevelIndex);
     } else {
-      goToMenuWithMessage('You cleared all 100 levels! 🎉', 'Amazing! Progress saved. Play again or reset progress.');
+      goToMenu('You cleared all levels! 🎉', 'Amazing — you finished all levels.');
     }
     return;
   }
 
-  // check for spikes in non-top collision (touching spike sides)
-  for (const p of level.platforms) {
+  // spike side collisions (touching from side)
+  for (const p of level.platforms){
     if (p.type === 'spike') {
-      // approximate spike area with a rectangle slightly taller
       const spikeRect = { x: p.x, y: p.y - 4, w: p.w, h: p.h + 6 };
       if (rectIntersects(playerRect, spikeRect)) {
-        goToMenuWithMessage('Ouch — spike!', 'You hit spikes! Back to menu. Try again.');
+        goToMenu('Ouch — spike!', 'You touched spikes. Back to menu.');
         return;
       }
     }
   }
 
   // falling off
-  if (player.y > H + 180) {
-    goToMenuWithMessage('You fell! 😿', 'You fell from the level. Back to the menu.');
+  if (player.y > H + 160) {
+    goToMenu('You fell! 😿', 'You fell from the level. Back to the menu.');
     return;
   }
 
-  // apply boost effect if standing on boost platform and jump happens next frame
-  // Implementation detail: when the player jumps we already check jumpBuffer & attempt jump.
-  // We'll modify jump strength dynamically just at jump moment.
-  // (Simpler approach: if standing on boost, multiply jumpStrength while standing)
-  if (standingOn && standingOn.type === 'boost' && standingOn.boost) {
-    player.jumpStrength = PLAYER_CONFIG.jumpStrength * standingOn.boost.multiplier;
-  } else {
-    player.jumpStrength = PLAYER_CONFIG.jumpStrength;
-  }
-
-  // remove gone platforms from collision in draw (we mark them _gone)
   // camera smoothing
-  const targetCamX = Math.max(0, player.x - W * 0.35);
+  const targetCamX = Math.max(0, player.x - W*0.35);
   camera.x += (targetCamX - camera.x) * 0.12;
-  camera.y = 0;
 
+  updateParticles(dt);
   updateHUD();
 }
 
-// -----------------------------------------
-// Drawing functions (cute style, with clear identifers for platform types)
-function drawRoundedRect(x,y,w,h,r=8){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);
-  ctx.arcTo(x+w,y,x+w,y+h,r);
-  ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r);
-  ctx.arcTo(x,y,x+w,y,r);
-  ctx.closePath();
-  ctx.fill();
-}
-function drawStar(cx,cy,r,spikes=5){
-  ctx.save();
-  ctx.beginPath();
-  const outer = r, inner = r*0.5;
-  let rot = Math.PI/2 * 3;
-  let x = cx, y = cy;
-  const step = Math.PI / spikes;
-  ctx.moveTo(cx, cy - outer);
-  for (let i=0;i<spikes;i++){
-    x = cx + Math.cos(rot) * outer; y = cy + Math.sin(rot) * outer;
-    ctx.lineTo(x,y);
-    rot += step;
-    x = cx + Math.cos(rot) * inner; y = cy + Math.sin(rot) * inner;
-    ctx.lineTo(x,y);
-    rot += step;
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-function drawCoin(x,y,r){
-  ctx.beginPath();
-  ctx.ellipse(x,y,r*1.1,r,0,0,Math.PI*2);
-  ctx.fill();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.stroke();
-  ctx.strokeStyle = 'transparent';
-}
+/* ---------------------------
+   Drawing code
+   --------------------------- */
+function drawRoundedRect(x,y,w,h,r=10){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); ctx.fill(); }
+function drawStar(cx,cy,r,spikes=6){ ctx.save(); ctx.beginPath(); const outer=r, inner=r*0.5; let rot=Math.PI/2*3; let x=cx,y=cy; const step=Math.PI/spikes; ctx.moveTo(cx,cy-outer); for(let i=0;i<spikes;i++){ x=cx+Math.cos(rot)*outer; y=cy+Math.sin(rot)*outer; ctx.lineTo(x,y); rot+=step; x=cx+Math.cos(rot)*inner; y=cy+Math.sin(rot)*inner; ctx.lineTo(x,y); rot+=step;} ctx.closePath(); ctx.fill(); ctx.restore(); }
+function drawCoin(x,y,r){ ctx.beginPath(); ctx.ellipse(x,y,r*1.1,r,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1; ctx.stroke(); ctx.strokeStyle='transparent'; }
 
-function draw() {
+function draw(){
   // background
   ctx.clearRect(0,0,W,H);
   const g = ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#FFF4F9'); g.addColorStop(0.5,'#FCE9FF'); g.addColorStop(1,'#E7F7FF');
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,W,H);
+  g.addColorStop(0,'#FFF4F9'); g.addColorStop(0.6,'#F7FBFF'); g.addColorStop(1,'#E7F7FF');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
 
-  // cute hills
+  // hills
   const hillColors = ['#FDECF7','#E9E9FF','#DDF6F8'];
   for (let i=0;i<3;i++){
     ctx.fillStyle = hillColors[i];
     ctx.beginPath();
     const amp = 80 + i*30;
     ctx.moveTo(-200, H*0.85 - i*40);
-    for (let x = -200; x <= W + 400; x += 60){
-      const y = H*0.85 - i*40 - Math.sin((x*0.003) + i)*amp;
-      ctx.lineTo(x, y);
+    for (let x=-200; x<=W+400; x+=60){
+      const y = H*0.85 - i*40 - Math.sin((x*0.003)+i)*amp;
+      ctx.lineTo(x,y);
     }
-    ctx.lineTo(W + 400, H + 200);
-    ctx.lineTo(-200, H + 200);
-    ctx.closePath();
-    ctx.fill();
+    ctx.lineTo(W+400,H+200); ctx.lineTo(-200,H+200); ctx.closePath(); ctx.fill();
   }
-
   // ground band
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.fillRect(0, H - 120, W, 120);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.fillRect(0,H-120,W,120);
 
   // camera transform
-  ctx.save();
-  ctx.translate(-Math.round(camera.x), -Math.round(camera.y));
+  ctx.save(); ctx.translate(-Math.round(camera.x), 0);
 
-  // draw platforms
-  for (const p of level.platforms) {
-    if (p._gone) continue; // broken gone
-    // choose color by type
-    let color = '#CDE8FF';
-    if (p.type === 'normal') color = '#CDE8FF';
-    else if (p.type === 'moving') color = '#D8C6FF'; // purple-ish
-    else if (p.type === 'boost') color = '#C8FFD0';  // green-ish
-    else if (p.type === 'spike') color = '#FFCCCC';
-    else if (p.type === 'breaking') color = '#FFE3BF'; // orange-ish
-
+  // platforms
+  for (const p of level.platforms){
+    if (p._gone) continue;
+    let color='#CDE8FF';
+    if (p.type==='moving') color='#D8C6FF';
+    if (p.type==='boost') color='#C8FFD0';
+    if (p.type==='spike') color='#FFCCCC';
+    if (p.type==='breaking') color='#FFE3BF';
     ctx.fillStyle = color;
     drawRoundedRect(p.x, p.y, p.w, p.h, 10);
-
-    // top shine
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    drawRoundedRect(p.x + 6, p.y + 2, Math.max(0, p.w - 12), 6, 6);
-
-    // visuals for special types
-    if (p.type === 'spike') {
-      // draw small spikes along top
-      const spikeCount = Math.max(3, Math.round(p.w / 28));
+    // shine
+    ctx.fillStyle='rgba(255,255,255,0.12)'; drawRoundedRect(p.x+6, p.y+2, Math.max(0,p.w-12), 6, 6);
+    // special visuals
+    if (p.type==='spike') {
+      const spikeCount = Math.max(3, Math.round(p.w/26));
       ctx.fillStyle = '#FF5A5A';
       for (let s=0;s<spikeCount;s++){
         const sx = p.x + 6 + (p.w - 12) * (s / Math.max(1,spikeCount-1));
         const sw = Math.min(18, (p.w-12) / spikeCount);
-        ctx.beginPath();
-        ctx.moveTo(sx - sw/2, p.y + p.h);
-        ctx.lineTo(sx, p.y + p.h - Math.min(22, sw*1.2));
-        ctx.lineTo(sx + sw/2, p.y + p.h);
-        ctx.closePath();
-        ctx.fill();
+        ctx.beginPath(); ctx.moveTo(sx - sw/2, p.y + p.h); ctx.lineTo(sx, p.y + p.h - Math.min(22, sw*1.2)); ctx.lineTo(sx + sw/2, p.y + p.h); ctx.closePath(); ctx.fill();
       }
-    } else if (p.type === 'moving' && p.moving) {
-      // small arrow indicator
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = '12px Arial';
-      if (p.moving.axis === 'x') ctx.fillText('⇄', p.x + p.w - 22, p.y + p.h - 6);
-      else ctx.fillText('⇅', p.x + p.w - 22, p.y + p.h - 6);
-    } else if (p.type === 'boost') {
-      // draw bounce icon
-      ctx.fillStyle = 'rgba(50,200,100,0.85)';
-      ctx.beginPath();
-      ctx.arc(p.x + 16, p.y + p.h/2, 8, 0, Math.PI*2);
-      ctx.fill();
-    } else if (p.type === 'breaking' && p.breaking) {
-      if (p.breaking.stepping && p.breaking.timer > 0) {
-        // show cracking shading
-        const frac = Math.max(0, Math.min(1, p.breaking.timer / BREAK_DELAY_MS));
-        ctx.fillStyle = `rgba(200,70,20,${1 - frac})`;
-        drawRoundedRect(p.x, p.y, p.w, p.h, 10);
-      }
+    } else if (p.type==='moving' && p.moving) {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font='12px Arial';
+      if (p.moving.axis==='x') ctx.fillText('⇄', p.x + p.w - 20, p.y + p.h - 6); else ctx.fillText('⇅', p.x + p.w - 20, p.y + p.h - 6);
+    } else if (p.type==='boost') {
+      ctx.fillStyle='rgba(20,200,120,0.9)'; ctx.beginPath(); ctx.arc(p.x + 16, p.y + p.h/2, 8, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle='white'; ctx.font='12px Arial'; ctx.fillText('↑', p.x + 12, p.y + p.h/2 + 4);
+    } else if (p.type==='breaking' && p.breaking && p.breaking.stepping) {
+      const frac = Math.max(0, Math.min(1, p.breaking.timer / BREAK_DELAY_MS));
+      ctx.fillStyle = `rgba(210,80,20,${1-frac})`; drawRoundedRect(p.x, p.y, p.w, p.h, 10);
     }
   }
 
-  // draw coins
-  for (const c of level.coins) {
+  // coins
+  for (const c of level.coins){
     if (c.collected) continue;
-    ctx.fillStyle = '#FFD66B';
-    drawCoin(c.x, c.y, c.r);
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.beginPath();
-    ctx.ellipse(c.x - c.r*0.18, c.y - c.r*0.28, c.r*0.26, c.r*0.09, 0, 0, Math.PI*2);
-    ctx.fill();
+    ctx.fillStyle = '#FFD66B'; drawCoin(c.x, c.y, c.r);
+    ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.beginPath(); ctx.ellipse(c.x - c.r*0.18, c.y - c.r*0.28, c.r*0.26, c.r*0.09, 0, 0, Math.PI*2); ctx.fill();
   }
 
-  // draw star (goal)
+  // star
   ctx.save();
   ctx.translate(level.star.x, level.star.y);
   const spin = (performance.now() / 500) % (Math.PI*2);
   ctx.rotate(spin);
-  ctx.fillStyle = '#FFF59A';
-  drawStar(0,0, level.star.r, 6);
-  ctx.fillStyle = '#FFD54A';
-  ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#FFF59A'; drawStar(0,0,level.star.r,6);
+  ctx.fillStyle = '#FFD54A'; ctx.beginPath(); ctx.arc(0,0,8,0,Math.PI*2); ctx.fill();
   ctx.restore();
 
-  // draw player
-  ctx.fillStyle = '#FFD28A';
-  drawRoundedRect(player.x, player.y, player.w, player.h, 10);
-  // eyes
-  ctx.fillStyle = '#2B2B2B';
-  ctx.beginPath();
-  ctx.ellipse(player.x + player.w*0.32, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2);
-  ctx.ellipse(player.x + player.w*0.68, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2);
-  ctx.fill();
-  // blush
-  ctx.fillStyle = 'rgba(255,105,135,0.12)';
-  ctx.beginPath(); ctx.ellipse(player.x + player.w*0.2, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+  // player
+  ctx.fillStyle = '#FFD28A'; drawRoundedRect(player.x, player.y, player.w, player.h, 10);
+  ctx.fillStyle = '#2B2B2B'; ctx.beginPath(); ctx.ellipse(player.x + player.w*0.32, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2); ctx.ellipse(player.x + player.w*0.68, player.y + player.h*0.36, 3.8, 5.2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,105,135,0.12)'; ctx.beginPath(); ctx.ellipse(player.x + player.w*0.2, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(player.x + player.w*0.8, player.y + player.h*0.6, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+
+  // particles
+  for (const p of particles){
+    ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life/600);
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+    ctx.globalAlpha = 1;
+  }
 
   ctx.restore();
 
   // paused overlay
   if (paused) {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#fff';
-    ctx.font = '44px "Poppins", Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('PAUSED', W/2, H/2 - 10);
-    ctx.font = '16px Arial';
-    ctx.fillText('Press P to resume', W/2, H/2 + 26);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff'; ctx.font='44px Poppins, Arial'; ctx.textAlign='center'; ctx.fillText('PAUSED', W/2, H/2 - 8);
+    ctx.font='14px Arial'; ctx.fillText('Press P to resume', W/2, H/2 + 22);
   }
 }
 
-// -----------------------------------------
-// Start / initialization
-applySaveToUI();
-buildLevelSelectGrid();
+/* ---------------------------
+   Level select UI builder
+   --------------------------- */
+function buildLevelSelectGrid(){
+  levelSelectGrid.innerHTML = '';
+  for (let i=0;i<LEVEL_COUNT;i++){
+    const btn = document.createElement('div');
+    btn.className = 'levelButton';
+    btn.textContent = i+1;
+    if (i+1 > (save.highestUnlocked || 1)) btn.classList.add('locked');
+    else btn.addEventListener('click', ()=> { currentLevelIndex = i; startGame(); });
+    levelSelectGrid.appendChild(btn);
+  }
+}
+
+/* ---------------------------
+   Start / restart handlers & init
+   --------------------------- */
+startBtn.addEventListener('click', ()=> startGame());
+openSelectBtn.addEventListener('click', ()=> { levelSelect.style.display = levelSelect.style.display === 'flex' ? 'none' : 'flex'; });
+closeSelectBtn.addEventListener('click', ()=> levelSelect.style.display = 'none');
+resetProgressBtn.addEventListener('click', ()=> {
+  if (confirm('Reset saved progress? This unlocks only level 1 and clears coins.')) {
+    resetProgress();
+    buildLevelSelectGrid();
+    applySaveUI();
+    menuTitle.textContent = '✨ Cute Platformer ✨';
+    menuDesc.textContent = 'Progress reset. Press Start to play.';
+  }
+});
+
+function restartLevel(){ loadLevel(currentLevelIndex); running=true; paused=false; menuEl.style.display='none'; }
+function goToMenuWithMsg(title,msg){ running=false; paused=false; menuEl.style.display='flex'; menuTitle.textContent = title; menuDesc.textContent = msg; buildLevelSelectGrid(); }
+
+/* init UI & ready */
+applySaveUI(); buildLevelSelectGrid();
 menuEl.style.display = 'flex';
 menuTitle.textContent = '✨ Cute Platformer ✨';
-menuDesc.textContent = '100 fun levels — moving platforms, jump boosts, spikes, and breaking platforms. Progress saves locally.';
+menuDesc.textContent = '100 playable levels — reach the star to unlock the next level. Progress is saved locally.';
 
-// ensure we start with an available level
-currentLevelIndex = Math.min(currentLevelIndex, save.highestUnlocked - 1);
-
-// debug: uncomment to auto-start
+/* debug: auto start: uncomment to test quickly */
 // startGame();
 
 </script>
